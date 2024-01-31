@@ -10,6 +10,7 @@ one for coloured edges, and one for colourless edges.
 @author: ----
 """
 import torch
+import torch_geometric.nn.conv
 
 from torch_geometric.nn import MessagePassing
 
@@ -139,6 +140,75 @@ class GNN(torch.nn.Module):
             return None
 
 
+class RGCN(torch.nn.Module):
+    def __init__(self, feature_dimension, hidden_dimension, num_layers, num_edge_colours):
+        super(RGCN, self).__init__()
+
+        self.num_edge_colours = num_edge_colours
+        self.in_channels = feature_dimension
+        self.out_channels = feature_dimension
+        self.hidden_channels = hidden_dimension
+        self.num_layers = num_layers
+
+        self.activation = torch.relu
+        self.final_activation = torch.sigmoid
+
+        self.dimensions = []
+        self.layers = []
+        for i in range(self.num_layers):
+            if i == 0:
+                in_channels = self.in_channels
+            else:
+                in_channels = self.hidden_channels
+            if i == self.num_layers - 1:
+                out_channels = self.out_channels
+            else:
+                out_channels = self.hidden_channels
+
+            self.dimensions.append(in_channels)
+            self.layers.append(torch_geometric.nn.conv.RGCNConv(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                num_relations=self.num_edge_colours,
+                aggr='add',
+                root_weight=True,
+                bias=True,
+            ))
+        self.layers = torch.nn.ModuleList(self.layers)
+
+        self.dimensions.append(self.out_channels)
+
+    def forward(self, data):
+        x, edge_index, edge_type = data.x, data.edge_index, data.edge_type
+
+        for layer in self.layers[:-1]:
+            x = self.activation(layer(x, edge_index, edge_type))
+
+        x = self.final_activation(self.layers[-1](x, edge_index, edge_type))
+        return x
+
+    # Helper methods to be used when extracting sound rules:
+
+    def layer_dimension(self, layer):  # layer 0 is input dimension
+        return self.dimensions[layer]
+
+    def matrix_A(self, layer):  # layer 1 is first layer of R-GCN
+        return self.layers[layer - 1].root.detach()
+
+    def matrix_B(self, layer, colour):  # colour is from 0 to num_colours (exclusive)
+        return self.layers[layer - 1].weight[colour].detach()
+
+    def bias(self, layer):
+        return self.layers[layer - 1].bias.detach()
+
+    def activation(self, layer):
+        if 0 < layer < self.num_layers:
+            return self.activation
+        elif layer == self.num_layers:
+            return self.final_activation
+        else:
+            raise Exception('No layer exists with ID', layer)
+
 #
 # class EC_GCNConv_FW(MessagePassing):
 #     # in_channels (int) - Size of each input sample
@@ -182,3 +252,4 @@ class GNN(torch.nn.Module):
 #         x = self.lin_self_1(x) + self.conv1(x, edge_index, edge_type)
 #
 #         return torch.relu(x)
+
