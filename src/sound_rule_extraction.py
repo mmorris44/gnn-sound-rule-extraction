@@ -6,11 +6,29 @@ import gnn_architectures
 
 parser = argparse.ArgumentParser(description="Extract sound rules")
 parser.add_argument('--model-path', help='Path to model file')
-parser.add_argument('--extraction-algorithm', help='Algorith to use for extraction', choices=['get-stats', 'NABN'])
+parser.add_argument('--weight-cutoff', help='Threshold size below which weights are clamped to 0', default=0, type=float)
+parser.add_argument('--extraction-algorithm', help='Algorithm to use for extraction', choices=['get-stats', 'NABN'])
 args = parser.parse_args()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model: gnn_architectures.GNN = torch.load(args.model_path).to(device)
+
+
+def threshold_matrix_values(matrix: torch.tensor, threshold: float):
+    below_threshold_mask = matrix <= -threshold
+    above_threshold_mask = matrix >= threshold
+    outside_threshold_mask = torch.logical_or(below_threshold_mask, above_threshold_mask)
+    inside_threshold_mask = torch.logical_not(outside_threshold_mask)
+    matrix[inside_threshold_mask] = 0
+
+
+if args.weight_cutoff != 0:
+    for layer in range(1, model.num_layers + 1):
+        matrix_a = model.matrix_A(layer)
+        threshold_matrix_values(matrix_a, args.weight_cutoff)
+        for colour in range(model.num_colours):
+            matrix_b = model.matrix_B(layer, colour)
+            threshold_matrix_values(matrix_b, args.weight_cutoff)
 
 
 def value_breakdown(matrix: torch.tensor, ratio=True):
