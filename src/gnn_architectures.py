@@ -9,6 +9,8 @@ one for coloured edges, and one for colourless edges.
 
 @author: ----
 """
+from typing import List
+
 import torch
 import torch_geometric.nn.conv
 
@@ -174,7 +176,8 @@ class RGCN(torch.nn.Module):
                 root_weight=True,
                 bias=True,
             ))
-        self.layers = torch.nn.ModuleList(self.layers)
+
+        self.layers: List[torch_geometric.nn.conv.RGCNConv] = torch.nn.ModuleList(self.layers)  # type: ignore
 
         self.dimensions.append(self.out_channels)
 
@@ -186,6 +189,10 @@ class RGCN(torch.nn.Module):
 
         x = self.final_activation(self.layers[-1](x, edge_index, edge_type))
         return x
+
+    def reset_parameters(self):
+        for layer in self.layers:
+            layer.reset_parameters()
 
     # Helper methods to be used when extracting sound rules:
 
