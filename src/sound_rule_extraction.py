@@ -158,9 +158,9 @@ if args.extraction_algorithm == 'Up-Down':
 
                 # Monotonically decreasing
                 if (neg and sj == UpDownStates.UP) or (pos and sj == UpDownStates.DOWN):
-                    up_exists_pair = True
+                    down_exists_pair = True
                 if (pos and sj == UpDownStates.UP) or (neg and sj == UpDownStates.DOWN) or (pos and sj == UpDownStates.UNKNOWN) or (neg and sj == UpDownStates.UNKNOWN):
-                    up_excluded_pair = True
+                    down_excluded_pair = True
 
                 # Zero
                 if not ((pos and sj == UpDownStates.ZERO) or (neg and sj == UpDownStates.ZERO) or zero):
