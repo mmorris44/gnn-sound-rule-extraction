@@ -1,4 +1,6 @@
 import argparse
+import math
+from enum import Enum
 
 import torch
 
@@ -7,7 +9,7 @@ import gnn_architectures
 parser = argparse.ArgumentParser(description="Extract sound rules")
 parser.add_argument('--model-path', help='Path to model file')
 parser.add_argument('--weight-cutoff', help='Threshold size below which weights are clamped to 0', default=0, type=float)
-parser.add_argument('--extraction-algorithm', help='Algorithm to use for extraction', choices=['get-stats', 'NABN'])
+parser.add_argument('--extraction-algorithm', help='Algorithm to use for extraction', choices=['stats', 'NABN', 'Up-Down'])
 args = parser.parse_args()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -74,3 +76,106 @@ if args.extraction_algorithm == 'get-stats':
     tot_negative = tot_negative / total
     tot_zeroes = tot_zeroes / total
     print("{:.2f}".format(tot_positive), "{:.2f}".format(tot_negative), "{:.2f}".format(tot_zeroes), sep=' || ')
+
+if args.extraction_algorithm == 'NABN':
+    s0 = [0] * model.layer_dimension(0)
+    states = [s0]
+    for layer in range(1, model.num_layers + 1):
+        sl = [0] * model.layer_dimension(layer)
+
+        for i in range(model.layer_dimension(layer)):
+            for j in range(model.layer_dimension(layer - 1)):
+                # Negative weights create ABN
+                if model.matrix_A(layer)[i][j] < 0:
+                    sl[i] = 1
+                    break
+                for colour in range(model.num_colours):
+                    if model.matrix_B(layer, colour)[i][j] < 0:
+                        sl[i] = 1
+                        break
+                if sl[i] == 1:
+                    break
+
+                # ABN propagation by non-zero weights
+                if states[layer - 1][j] == 1:
+                    if not math.isclose(model.matrix_A(layer)[i][j].item(), 0):
+                        sl[i] = 1
+                        break
+                    for colour in range(model.num_colours):
+                        if not math.isclose(model.matrix_B(layer, colour)[i][j].item(), 0):
+                            sl[i] = 1
+                            break
+                    if sl[i] == 1:
+                        break
+
+        states.append(sl)
+    print(states[-1])
+    print('Different rule heads that can be checked:', states[-1].count(0))
+
+
+class UpDownStates(Enum):
+    UP = 0
+    DOWN = 1
+    ZERO = 2
+    UNKNOWN = 3
+
+
+if args.extraction_algorithm == 'Up-Down':
+    # 0 = up, 1 = down, 2 = 0, 3 = ?
+    s0 = [UpDownStates.UP] * model.layer_dimension(0)
+    states = [s0]
+    for layer in range(1, model.num_layers + 1):
+        sl = [UpDownStates.UNKNOWN] * model.layer_dimension(layer)
+
+        for i in range(model.layer_dimension(layer)):
+            up_exists_pair, up_excluded_pair = False, False
+            down_exists_pair, down_excluded_pair = False, False
+            zero_excluded_pair = False
+
+            for j in range(model.layer_dimension(layer - 1)):
+                pos, neg = False, False
+                if model.matrix_A(layer)[i][j] > 0:
+                    pos = True
+                for colour in range(model.num_colours):
+                    if model.matrix_B(layer, colour)[i][j] > 0:
+                        pos = True
+                        break
+                if model.matrix_A(layer)[i][j] < 0:
+                    neg = True
+                for colour in range(model.num_colours):
+                    if model.matrix_B(layer, colour)[i][j] < 0:
+                        neg = True
+                        break
+
+                zero = not (pos or neg)
+                sj = states[layer - 1][j]
+
+                # Monotonically increasing
+                if (pos and sj == UpDownStates.UP) or (neg and sj == UpDownStates.DOWN):
+                    up_exists_pair = True
+                if (neg and sj == UpDownStates.UP) or (pos and sj == UpDownStates.DOWN) or (neg and sj == UpDownStates.UNKNOWN) or (pos and sj == UpDownStates.UNKNOWN):
+                    up_excluded_pair = True
+
+                # Monotonically decreasing
+                if (neg and sj == UpDownStates.UP) or (pos and sj == UpDownStates.DOWN):
+                    up_exists_pair = True
+                if (pos and sj == UpDownStates.UP) or (neg and sj == UpDownStates.DOWN) or (pos and sj == UpDownStates.UNKNOWN) or (neg and sj == UpDownStates.UNKNOWN):
+                    up_excluded_pair = True
+
+                # Zero
+                if not ((pos and sj == UpDownStates.ZERO) or (neg and sj == UpDownStates.ZERO) or zero):
+                    zero_excluded_pair = True
+
+            if up_exists_pair and not up_excluded_pair:
+                sl[i] = UpDownStates.UP
+            elif down_exists_pair and not down_excluded_pair:
+                sl[i] = UpDownStates.DOWN
+            elif not zero_excluded_pair:
+                sl[i] = UpDownStates.ZERO
+
+        states.append(sl)
+    print(states[-1])
+    print('Monotonically increasing:', states[-1].count(UpDownStates.UP))
+    print('Monotonically decreasing:', states[-1].count(UpDownStates.DOWN))
+    print('Zero:', states[-1].count(UpDownStates.ZERO))
+    print('Unknown:', states[-1].count(UpDownStates.UNKNOWN))
