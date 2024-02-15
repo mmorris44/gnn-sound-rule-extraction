@@ -1,6 +1,7 @@
 import argparse
 import math
 from enum import Enum
+from typing import List
 
 import torch
 
@@ -9,7 +10,7 @@ import gnn_architectures
 parser = argparse.ArgumentParser(description="Extract sound rules")
 parser.add_argument('--model-path', help='Path to model file')
 parser.add_argument('--weight-cutoff', help='Threshold size below which weights are clamped to 0', default=0, type=float)
-parser.add_argument('--extraction-algorithm', help='Algorithm to use for extraction', choices=['stats', 'NABN', 'Up-Down'])
+parser.add_argument('--extraction-algorithm', help='Algorithm to use for extraction', choices=['stats', 'nabn', 'up-down', 'min-max'])
 args = parser.parse_args()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -77,7 +78,7 @@ if args.extraction_algorithm == 'stats':
     tot_zeroes = tot_zeroes / total
     print("{:.2f}".format(tot_positive), "{:.2f}".format(tot_negative), "{:.2f}".format(tot_zeroes), sep=' || ')
 
-if args.extraction_algorithm == 'NABN':
+if args.extraction_algorithm == 'nabn':
     s0 = [0] * model.layer_dimension(0)
     states = [s0]
     for layer in range(1, model.num_layers + 1):
@@ -120,7 +121,7 @@ class UpDownStates(Enum):
     UNKNOWN = 3
 
 
-if args.extraction_algorithm == 'Up-Down':
+if args.extraction_algorithm == 'up-down':
     # 0 = up, 1 = down, 2 = 0, 3 = ?
     s0 = [UpDownStates.UP] * model.layer_dimension(0)
     states = [s0]
@@ -179,3 +180,46 @@ if args.extraction_algorithm == 'Up-Down':
     print('Monotonically decreasing:', states[-1].count(UpDownStates.DOWN))
     print('Zero:', states[-1].count(UpDownStates.ZERO))
     print('Unknown:', states[-1].count(UpDownStates.UNKNOWN))
+
+
+class MinMaxStates(Enum):
+    VALUE = 0
+    INF = 1
+    NEG_INF = 2
+    UNKNOWN = 3
+
+
+# This is not working, but there may be something useful here for later
+def apply_gnn_layer_to_arbitrary_node(initial_value: torch.tensor, edges_per_colour: List[int], gnn: gnn_architectures.GNN, layer_num: int):
+    a_matrix = gnn.matrix_A(layer_num)
+    b_matrices = [gnn.matrix_B(layer_num, colour_id) for colour_id in range(gnn.num_colours)]
+    base_tensor = torch.matmul(a_matrix, initial_value)
+    channel_states = [(MinMaxStates.VALUE, MinMaxStates.VALUE) for _ in range(base_tensor.size()[0])]
+    agg_tensor_summed = torch.zeros_like(base_tensor)
+    for colour, b_matrix in enumerate(b_matrices):
+        agg_tensor = torch.matmul(b_matrix, initial_value)
+        agg_tensor_summed += agg_tensor * edges_per_colour[colour]
+    for i, entry in enumerate(agg_tensor_summed):
+        if entry < 0:
+            channel_states[i] = (MinMaxStates.NEG_INF, MinMaxStates.VALUE)
+        elif entry > 0:
+            channel_states[i] = (MinMaxStates.VALUE, MinMaxStates.INF)
+    return model.activation(layer_num)(base_tensor + agg_tensor_summed + gnn.bias(layer_num)), channel_states
+
+
+
+
+
+if args.extraction_algorithm == 'min-max':
+    s0 = [((MinMaxStates.VALUE, 0), (MinMaxStates.VALUE, 1)) for _ in range(model.layer_dimension(0))]
+    matrix_a_1 = model.matrix_A(1)
+    print(matrix_a_1.shape)
+    print(model.layer_dimension(0))
+
+    s1 = [((MinMaxStates.VALUE, 0), (MinMaxStates.VALUE, 1)) for _ in range(model.layer_dimension(1))]
+    rand_mask = torch.rand(model.layer_dimension(0)) > 0.5
+    init_value = torch.zeros(model.layer_dimension(0))
+    init_value[rand_mask] = 1
+    edges_per_colour = [1] * model.num_colours
+    apply_gnn_layer_to_arbitrary_node(init_value, model, 1)
+
