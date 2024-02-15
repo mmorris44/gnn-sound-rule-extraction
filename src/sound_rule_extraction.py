@@ -10,7 +10,7 @@ import gnn_architectures
 parser = argparse.ArgumentParser(description="Extract sound rules")
 parser.add_argument('--model-path', help='Path to model file')
 parser.add_argument('--weight-cutoff', help='Threshold size below which weights are clamped to 0', default=0, type=float)
-parser.add_argument('--extraction-algorithm', help='Algorithm to use for extraction', choices=['stats', 'nabn', 'up-down', 'min-max'])
+parser.add_argument('--extraction-algorithm', help='Algorithm to use for extraction', choices=['stats', 'nabn', 'up-down', 'neg-inf-search'])
 args = parser.parse_args()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -207,19 +207,30 @@ def apply_gnn_layer_to_arbitrary_node(initial_value: torch.tensor, edges_per_col
     return model.activation(layer_num)(base_tensor + agg_tensor_summed + gnn.bias(layer_num)), channel_states
 
 
+# Node has no incoming edges
+# Final layer of GNN is not applied
+def apply_gnn_to_arbitrary_node(initial_value: torch.tensor, model: gnn_architectures.GNN):
+    node_value = initial_value
+    for layer in range(1, model.num_layers):
+        # \sigma(Av + b)
+        node_value = model.activation(layer)(torch.matmul(model.matrix_A(layer), node_value) + model.bias(layer))
+    return node_value
 
 
-
-if args.extraction_algorithm == 'min-max':
-    s0 = [((MinMaxStates.VALUE, 0), (MinMaxStates.VALUE, 1)) for _ in range(model.layer_dimension(0))]
-    matrix_a_1 = model.matrix_A(1)
-    print(matrix_a_1.shape)
-    print(model.layer_dimension(0))
-
-    s1 = [((MinMaxStates.VALUE, 0), (MinMaxStates.VALUE, 1)) for _ in range(model.layer_dimension(1))]
+if args.extraction_algorithm == 'neg-inf-search':
     rand_mask = torch.rand(model.layer_dimension(0)) > 0.5
-    init_value = torch.zeros(model.layer_dimension(0))
-    init_value[rand_mask] = 1
-    edges_per_colour = [1] * model.num_colours
-    apply_gnn_layer_to_arbitrary_node(init_value, model, 1)
+    initial_value = torch.zeros(model.layer_dimension(0))
+    initial_value[rand_mask] = 1
+
+    arb_node_value = apply_gnn_to_arbitrary_node(initial_value, model)
+    is_neg_inf = torch.zeros(model.layer_dimension(model.num_layers), dtype=torch.bool)
+    for colour in range(model.num_colours):
+        matrix_b = model.matrix_B(model.num_layers, colour)
+        passed_value = torch.matmul(matrix_b, arb_node_value)
+        passed_value_neg_mask = passed_value < 0
+        is_neg_inf[passed_value_neg_mask] = 1
+
+    print(is_neg_inf)
+    print(torch.count_nonzero(is_neg_inf).item(), '/', model.layer_dimension(model.num_layers), 'channels found which can be negative infinity before the final activation function')
+
 
