@@ -220,15 +220,24 @@ def apply_gnn_to_arbitrary_node(initial_value: torch.tensor, model: gnn_architec
 if args.extraction_algorithm == 'neg-inf-search':
     rand_mask = torch.rand(model.layer_dimension(0)) > 0.5
     initial_value = torch.zeros(model.layer_dimension(0))
-    initial_value[rand_mask] = 1
+    initial_value[rand_mask] = 1  # half 0s, half 1s
+    initial_value = torch.zeros(model.layer_dimension(0))  # TODO: remove later, manual override for now
 
+    # Get value for node after L - 1 GNN layers, where node has no incoming edges
     arb_node_value = apply_gnn_to_arbitrary_node(initial_value, model)
+    # By default, nothing is negative infinity
     is_neg_inf = torch.zeros(model.layer_dimension(model.num_layers), dtype=torch.bool)
     for colour in range(model.num_colours):
         matrix_b = model.matrix_B(model.num_layers, colour)
-        passed_value = torch.matmul(matrix_b, arb_node_value)
+        passed_value = torch.matmul(matrix_b, arb_node_value)  # Possible product from a neighbouring node
+        # Different channels do not need to be negative in conjunction with each other
+        # All that matters is that there is one such graph in which a channel can be made negative infinity
         passed_value_neg_mask = passed_value < 0
         is_neg_inf[passed_value_neg_mask] = 1
+
+    # TODO: issue with algorithm. v, \sigma(A_1 v + b_1), ..., were already passed in previous layers
+    # When more edges are added, it also adds values from them
+    # Fine for now if initial value is set to zero, since v_0=0 cancels out B_0 matrices, and model is only two layers
 
     print(is_neg_inf)
     print(torch.count_nonzero(is_neg_inf).item(), '/', model.layer_dimension(model.num_layers), 'channels found which can be negative infinity before the final activation function')
