@@ -48,7 +48,7 @@ def value_breakdown(matrix: torch.tensor, ratio=True):
     return n_pos, n_neg, n_zero
 
 
-if args.extraction_algorithm == 'get-stats':
+if args.extraction_algorithm == 'stats':
     tot_positive, tot_negative, tot_zeroes = 0, 0, 0
     print('Layer || Matrix || Positive || Negative || Zero')
     for layer in range(1, model.num_layers + 1):
