@@ -10,7 +10,8 @@ import gnn_architectures
 parser = argparse.ArgumentParser(description="Extract sound rules")
 parser.add_argument('--model-path', help='Path to model file')
 parser.add_argument('--weight-cutoff', help='Threshold size below which weights are clamped to 0', default=0, type=float)
-parser.add_argument('--extraction-algorithm', help='Algorithm to use for extraction', choices=['stats', 'nabn', 'up-down', 'neg-inf-search'])
+parser.add_argument('--extraction-algorithm', help='Algorithm to use for extraction',
+                    choices=['stats', 'nabn', 'up-down', 'neg-inf-fan', 'neg-inf-line'])
 args = parser.parse_args()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -217,10 +218,15 @@ def apply_gnn_to_arbitrary_node(initial_value: torch.tensor, model: gnn_architec
     return node_value
 
 
-if args.extraction_algorithm == 'neg-inf-search':
-    rand_mask = torch.rand(model.layer_dimension(0)) > 0.5
-    initial_value = torch.zeros(model.layer_dimension(0))
-    initial_value[rand_mask] = 1  # half 0s, half 1s
+def random_binary_tensor(size: int, probability_of_one: float):
+    rand_mask = torch.rand(size) > probability_of_one
+    rand_tensor = torch.zeros(size)
+    rand_tensor[rand_mask] = 1  # some 0s, some 1s
+    return rand_tensor
+
+
+if args.extraction_algorithm == 'neg-inf-fan':
+    initial_value = random_binary_tensor(model.layer_dimension(0), 0.5)
     initial_value = torch.zeros(model.layer_dimension(0))  # TODO: remove later, manual override for now
 
     # Get value for node after L - 1 GNN layers, where node has no incoming edges
@@ -243,3 +249,47 @@ if args.extraction_algorithm == 'neg-inf-search':
     print(torch.count_nonzero(is_neg_inf).item(), '/', model.layer_dimension(model.num_layers), 'channels found which can be negative infinity before the final activation function')
 
 
+# Only works with ReLU
+# Line of nodes to the root node, fan at the end away from the root node
+if args.extraction_algorithm == 'neg-inf-line':
+    initial_value = random_binary_tensor(model.layer_dimension(0), 0.5)
+    # Sequence of colours to use for the edges. First colour is for the fan. Last connects to root node
+    colour_sequence = [0] * model.num_layers  # TODO: randomize later
+
+    # track current value of latest reached node
+    # x, y in (x + dy)
+    neighbour_x_value = torch.clone(initial_value)  # set x-component to initial value
+    neighbour_y_value = torch.zeros(model.layer_dimension(0))
+    current_unreached_value = torch.clone(initial_value)  # tracks current value of an unreached node in the line
+
+    # Stop one short of final layer, since final layer is what will pass the infinities to the root node
+    for layer in range(1, model.num_layers):
+        # Compute default x and y values (as if y > 0)
+        # x_value comes from current unreached value
+        x_value = model.bias(layer) + torch.matmul(model.matrix_A(layer), current_unreached_value)
+        # add x_value from neighbour as well
+        x_value += torch.matmul(model.matrix_B(layer, colour_sequence[layer - 1]), neighbour_x_value)
+        # y_value comes from neighbour, which are "current" values
+        y_value = torch.matmul(model.matrix_B(layer, colour_sequence[layer - 1]), neighbour_y_value)
+
+        # Set new x and y values
+        # Set to non-zero where y > 0
+        y_mask = y_value > 0
+        neighbour_x_value = torch.where(y_mask > 0, x_value, 0)
+        neighbour_y_value = torch.where(y_mask > 0, y_value, 0)
+
+        # Update unreached value
+        current_unreached_value = model.activation(layer)(
+            torch.matmul(model.matrix_A(layer), current_unreached_value) + model.bias(layer))
+
+    # Compute final values that will be passed
+    y_value = torch.matmul(model.matrix_B(model.num_layers, colour_sequence[model.num_layers - 1]), neighbour_y_value)
+
+    # If y value is negative, then d can be made arbitrary large to pass negative infinity
+    is_neg_inf = torch.zeros(model.layer_dimension(model.num_layers), dtype=torch.bool)
+    y_value_neg_mask = y_value < 0
+    is_neg_inf[y_value_neg_mask] = 1
+
+    print(is_neg_inf)
+    print(torch.count_nonzero(is_neg_inf).item(), '/', model.layer_dimension(model.num_layers),
+          'channels found which can be negative infinity before the final activation function')
