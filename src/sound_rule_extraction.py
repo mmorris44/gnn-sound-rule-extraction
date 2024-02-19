@@ -1,5 +1,6 @@
 import argparse
 import math
+import random
 from enum import Enum
 from typing import List
 
@@ -225,9 +226,10 @@ def random_binary_tensor(size: int, probability_of_one: float):
     return rand_tensor
 
 
+# Algorithm only works for two-layer GNNs
+# Since v_0=0 cancels out B_0 matrices, and model is only two layers
 if args.extraction_algorithm == 'neg-inf-fan':
-    initial_value = random_binary_tensor(model.layer_dimension(0), 0.5)
-    initial_value = torch.zeros(model.layer_dimension(0))  # TODO: remove later, manual override for now
+    initial_value = torch.zeros(model.layer_dimension(0))  # Init to zeroes to pass nothing in first layer
 
     # Get value for node after L - 1 GNN layers, where node has no incoming edges
     arb_node_value = apply_gnn_to_arbitrary_node(initial_value, model)
@@ -241,62 +243,67 @@ if args.extraction_algorithm == 'neg-inf-fan':
         passed_value_neg_mask = passed_value < 0
         is_neg_inf[passed_value_neg_mask] = 1
 
-    # TODO: issue with algorithm. v, \sigma(A_1 v + b_1), ..., were already passed in previous layers
-    # When more edges are added, it also adds values from them
-    # Fine for now if initial value is set to zero, since v_0=0 cancels out B_0 matrices, and model is only two layers
-
     print(is_neg_inf)
     print(torch.count_nonzero(is_neg_inf).item(), '/', model.layer_dimension(model.num_layers), 'channels found which can be negative infinity before the final activation function')
 
 
 # Only works with ReLU
-# Line of nodes to the root node, fan at the end away from the root node
+# Line of nodes to the root node, fan of size d at the end away from the root node
 if args.extraction_algorithm == 'neg-inf-line':
-    initial_value = random_binary_tensor(model.layer_dimension(0), 0.5)
-    # Sequence of colours to use for the edges. First colour is for the fan. Last connects to root node
-    colour_sequence = [0] * model.num_layers  # TODO: randomize later
-
-    # track current value of latest reached node
-    # x, y in (x + dy)
-    neighbour_x_value = torch.zeros(model.layer_dimension(0))  # set initial x-component to 0
-    neighbour_y_value = torch.clone(initial_value)  # set y-component to initial value
-    current_unreached_value = torch.clone(initial_value)  # tracks current value of an unreached node in the line
-
-    # In first layer: neighbour_x_value, neighbour_y_value refer to the fan nodes
-    # d(Bv) = B(dv), so y-component is set to initial_value v
-    # current_unreached_value refers to the node connected to the fan
-
-    # Stop one short of final layer, since final layer is what will pass the infinities to the root node
-    for layer in range(1, model.num_layers):
-        # Compute default x and y values (as if y > 0)
-        # x_value comes from current unreached value
-        x_value = model.bias(layer) + torch.matmul(model.matrix_A(layer), current_unreached_value)
-        # add x_value from neighbour as well
-        x_value += torch.matmul(model.matrix_B(layer, colour_sequence[layer - 1]), neighbour_x_value)
-        # y_value comes from neighbour, which are "current" values
-        y_value = torch.matmul(model.matrix_B(layer, colour_sequence[layer - 1]), neighbour_y_value)
-
-        # Set new x and y values
-        # Set to non-zero where y > 0
-        y_mask = y_value > 0
-        neighbour_x_value = torch.where(y_mask > 0, x_value, 0)
-        neighbour_y_value = torch.where(y_mask > 0, y_value, 0)
-
-        # Update unreached value
-        # \sigma(Av + b + Bu), where u, v are both the current unreached value
-        current_unreached_value = model.activation(layer)(
-            torch.matmul(model.matrix_A(layer), current_unreached_value)
-            + model.bias(layer)
-            + torch.matmul(model.matrix_B(layer, colour_sequence[layer - 1]), current_unreached_value)
-        )
-
-    # Compute final values that will be passed
-    y_value = torch.matmul(model.matrix_B(model.num_layers, colour_sequence[model.num_layers - 1]), neighbour_y_value)
-
-    # If y value is negative, then d can be made arbitrary large to pass negative infinity
+    # Channels by default cannot have negative infinity passed to them
     is_neg_inf = torch.zeros(model.layer_dimension(model.num_layers), dtype=torch.bool)
-    y_value_neg_mask = y_value < 0
-    is_neg_inf[y_value_neg_mask] = 1
+    algorithm_iterations = 10
+    for _ in range(algorithm_iterations):
+        initial_value = random_binary_tensor(model.layer_dimension(0), 0.5)
+        # Sequence of colours to use for the edges. First colour is for the fan. Last connects to root node
+        colour_sequence = random.sample(range(model.num_colours), model.num_layers)
+
+        # track current value of latest reached node
+        # x, y in (x + dy)
+        neighbour_x_value = torch.zeros(model.layer_dimension(0))  # set initial x-component to 0
+        neighbour_y_value = torch.clone(initial_value)  # set y-component to initial value
+        current_unreached_value = torch.clone(initial_value)  # tracks current value of an unreached node in the line
+
+        # In first layer: neighbour_x_value, neighbour_y_value refer to the fan nodes
+        # d(Bv) = B(dv), so y-component is set to initial_value v
+        # current_unreached_value refers to the node connected to the fan
+
+        # Stop one short of final layer, since final layer is what will pass the infinities to the root node
+        for layer in range(1, model.num_layers):
+            # Compute default x and y values (as if y > 0)
+            # x_value comes from current unreached value
+            x_value = model.bias(layer) + torch.matmul(model.matrix_A(layer), current_unreached_value)
+            # add x_value from neighbour as well
+            x_value += torch.matmul(model.matrix_B(layer, colour_sequence[layer - 1]), neighbour_x_value)
+            # y_value comes from neighbour, which are "current" values
+            y_value = torch.matmul(model.matrix_B(layer, colour_sequence[layer - 1]), neighbour_y_value)
+
+            # Set new x and y values
+            # Set to non-zero where y > 0
+            y_mask = y_value > 0
+            neighbour_x_value = torch.where(y_mask > 0, x_value, 0)
+            neighbour_y_value = torch.where(y_mask > 0, y_value, 0)
+
+            # Update unreached value
+            # \sigma(Av + b + Bu), where u, v are both the current unreached value
+            current_unreached_value = model.activation(layer)(
+                torch.matmul(model.matrix_A(layer), current_unreached_value)
+                + model.bias(layer)
+                + torch.matmul(model.matrix_B(layer, colour_sequence[layer - 1]), current_unreached_value)
+            )
+
+        # Compute final values that will be passed
+        y_value = torch.matmul(model.matrix_B(model.num_layers, colour_sequence[model.num_layers - 1]), neighbour_y_value)
+
+        # If y value is negative, then d can be made arbitrary large to pass negative infinity
+        y_value_neg_mask = y_value < 0
+        is_neg_inf[y_value_neg_mask] = 1
+
+        # For logging this iteration's result
+        neg_inf_channels_for_iter = torch.zeros_like(is_neg_inf)
+        neg_inf_channels_for_iter[y_value_neg_mask] = 1
+
+        print(torch.count_nonzero(neg_inf_channels_for_iter).item(), '/', model.layer_dimension(model.num_layers))
 
     print(is_neg_inf)
     print(torch.count_nonzero(is_neg_inf).item(), '/', model.layer_dimension(model.num_layers),
