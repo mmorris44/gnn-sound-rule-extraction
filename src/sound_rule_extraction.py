@@ -258,9 +258,13 @@ if args.extraction_algorithm == 'neg-inf-line':
 
     # track current value of latest reached node
     # x, y in (x + dy)
-    neighbour_x_value = torch.clone(initial_value)  # set x-component to initial value
-    neighbour_y_value = torch.zeros(model.layer_dimension(0))
+    neighbour_x_value = torch.zeros(model.layer_dimension(0))  # set initial x-component to 0
+    neighbour_y_value = torch.clone(initial_value)  # set y-component to initial value
     current_unreached_value = torch.clone(initial_value)  # tracks current value of an unreached node in the line
+
+    # In first layer: neighbour_x_value, neighbour_y_value refer to the fan nodes
+    # d(Bv) = B(dv), so y-component is set to initial_value v
+    # current_unreached_value refers to the node connected to the fan
 
     # Stop one short of final layer, since final layer is what will pass the infinities to the root node
     for layer in range(1, model.num_layers):
@@ -279,8 +283,12 @@ if args.extraction_algorithm == 'neg-inf-line':
         neighbour_y_value = torch.where(y_mask > 0, y_value, 0)
 
         # Update unreached value
+        # \sigma(Av + b + Bu), where u, v are both the current unreached value
         current_unreached_value = model.activation(layer)(
-            torch.matmul(model.matrix_A(layer), current_unreached_value) + model.bias(layer))
+            torch.matmul(model.matrix_A(layer), current_unreached_value)
+            + model.bias(layer)
+            + torch.matmul(model.matrix_B(layer, colour_sequence[layer - 1]), current_unreached_value)
+        )
 
     # Compute final values that will be passed
     y_value = torch.matmul(model.matrix_B(model.num_layers, colour_sequence[model.num_layers - 1]), neighbour_y_value)
