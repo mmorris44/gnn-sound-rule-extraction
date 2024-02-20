@@ -229,6 +229,7 @@ def random_binary_tensor(size: int, probability_of_one: float):
 # Algorithm only works for two-layer GNNs
 # Since v_0=0 cancels out B_0 matrices, and model is only two layers
 if args.extraction_algorithm == 'neg-inf-fan':
+    assert model.num_layers == 2
     initial_value = torch.zeros(model.layer_dimension(0))  # Init to zeroes to pass nothing in first layer
 
     # Get value for node after L - 1 GNN layers, where node has no incoming edges

@@ -40,9 +40,13 @@ parser.add_argument('--encoding-scheme',
 parser.add_argument('--encoder-folder',
                     help='Name of the folder where the used encoder/decoder(s) will be stored')
 parser.add_argument('--aggregation',
-                    default='max-max',
-                    choices=['max-max', 'max-sum', 'sum-max', 'sum-sum'],
+                    default='sum',
+                    choices=['max', 'sum'],
                     help='Aggregation function to be used by the model')
+parser.add_argument('--layers',
+                    default=2,
+                    type=int,
+                    help='Number of layers in the model')
 parser.add_argument('--train-with-dummies',
                     default=False,
                     action='store_true')
@@ -140,7 +144,9 @@ if __name__ == "__main__":
     #  the dataset argument: __length__, and __getitem__, so it works with a list like this.
     train_loader = DataLoader(dataset=[train_data.to(device)], batch_size=1)
 
-    model = GNN(feature_dimension=len(cd_unary_predicates), num_edge_colours=len(cd_binary_predicates),
+    model = GNN(num_layers=args.layers,
+                feature_dimension=len(cd_unary_predicates),
+                num_edge_colours=len(cd_binary_predicates),
                 aggregation=args.aggregation).to(device)
     # Select Adam as the optimisation algorithm
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
