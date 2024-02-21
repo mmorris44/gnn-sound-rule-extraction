@@ -255,6 +255,7 @@ if args.extraction_algorithm == 'neg-inf-line':
     is_neg_inf = torch.zeros(model.layer_dimension(model.num_layers), dtype=torch.bool)
     algorithm_iterations = 10
     for _ in range(algorithm_iterations):
+        # All nodes given the same initial value
         initial_value = random_binary_tensor(model.layer_dimension(0), 0.5)
         # Sequence of colours to use for the edges. First colour is for the fan. Last connects to root node
         colour_sequence = random.sample(range(model.num_colours), model.num_layers)
@@ -265,14 +266,17 @@ if args.extraction_algorithm == 'neg-inf-line':
         neighbour_y_value = torch.clone(initial_value)  # set y-component to initial value
         current_unreached_value = torch.clone(initial_value)  # tracks current value of an unreached node in the line
 
-        # In first layer: neighbour_x_value, neighbour_y_value refer to the fan nodes
+        # In first layer:
+        # neighbour_x_value, neighbour_y_value refer to the fan nodes
         # d(Bv) = B(dv), so y-component is set to initial_value v
+        # This tracks the sum of all the neighbours of the node connected to the fan
+        # Equivalent to having one neighbour with feature equal to that sum
         # current_unreached_value refers to the node connected to the fan
 
         # Stop one short of final layer, since final layer is what will pass the infinities to the root node
         for layer in range(1, model.num_layers):
             # Compute default x and y values (as if y > 0)
-            # x_value comes from current unreached value
+            # first part of x_value comes from current unreached value
             x_value = model.bias(layer) + torch.matmul(model.matrix_A(layer), current_unreached_value)
             # add x_value from neighbour as well
             x_value += torch.matmul(model.matrix_B(layer, colour_sequence[layer - 1]), neighbour_x_value)
@@ -281,6 +285,8 @@ if args.extraction_algorithm == 'neg-inf-line':
 
             # Set new x and y values
             # Set to non-zero where y > 0
+            # y > 0 means that as d tends to infinity, (x + dy) tends to infinity, so the ReLU drops away
+            # y < 0 means that as d tends to infinity, (x + dy) tends to negative infinity, so the output of ReLU is 0
             y_mask = y_value > 0
             neighbour_x_value = torch.where(y_mask > 0, x_value, 0)
             neighbour_y_value = torch.where(y_mask > 0, y_value, 0)
