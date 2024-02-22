@@ -32,6 +32,11 @@ parser.add_argument('--train-examples',
                     nargs='?',
                     default=None,
                     help='Filename of training data with positive examples (facts), including extension.')
+# When the below is used, it will overwrite train_graph and train_examples
+parser.add_argument('--train-file-full',
+                    nargs='?',
+                    default=None,
+                    help='Filename of full graph. Input and positive examples need to be sampled from it.')
 parser.add_argument('--encoding-scheme',
                     default='canonical',
                     nargs='?',
@@ -61,15 +66,32 @@ if __name__ == "__main__":
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    print("Loading predicates from {}".format(args.predicates))
-    data_binary_predicates, data_unary_predicates = load_predicates(args.predicates)
-    print("{} unary predicates and {} binary predicates in the signature.".format(len(data_unary_predicates),
-                                                                                  len(data_binary_predicates)))
+    # Check if full dataset has been given
+    # If not, then separate input and targets must have been provided, as well as a predicate list
+    if args.train_file_full is not None:
+        assert os.path.exists(args.train_file_full)
+        assert args.predicates is None, 'args.train_file_full provided, cannot also specify args.predicates'
+        assert args.train_graph is None, 'args.train_file_full provided, cannot also specify args.train_graph'
+        assert args.train_examples is None, 'args.train_file_full provided, cannot also specify args.train_examples'
 
-    train_graph_path = args.train_graph
-    assert os.path.exists(train_graph_path)
-    print("Loading graph data from {}".format(train_graph_path))
-    train_graph_dataset = data_parser.parse(train_graph_path)
+        print("Loading input graph, training target data, and predicates from {}".format(args.train_file_full))
+        train_graph_dataset, examples, predicates_set = data_parser.parse_from_full_train_file(args.train_file_full)
+        data_binary_predicates, data_unary_predicates = list(predicates_set), []
+    else:
+        print("Loading predicates from {}".format(args.predicates))
+        data_binary_predicates, data_unary_predicates = load_predicates(args.predicates)
+        print("{} unary predicates and {} binary predicates in the signature."
+              .format(len(data_unary_predicates), len(data_binary_predicates)))
+
+        train_graph_path = args.train_graph
+        assert os.path.exists(train_graph_path)
+        print("Loading graph data from {}".format(train_graph_path))
+        train_graph_dataset = data_parser.parse(train_graph_path)
+
+        train_examples_path = args.train_examples
+        assert os.path.exists(train_examples_path)
+        print("Loading graph data from {}".format(train_examples_path))
+        examples = data_parser.parse(train_examples_path)
 
     # 'cd' is short for (col,\delta), referring to the (col,\delta)-signature
     if args.encoding_scheme == 'canonical':
@@ -101,11 +123,7 @@ if __name__ == "__main__":
     (train_x, train_nodes, train_edge_list, train_edge_colour_list) = \
         can_encoder_decoder.encode_dataset(cd_dataset, use_dummy_constants=args.train_with_dummies)
 
-    train_examples_path = args.train_examples
-    assert os.path.exists(train_examples_path)
-    print("Loading graph data from {}".format(train_examples_path))
     train_examples_dataset = []
-    examples = data_parser.parse(train_examples_path)
     examples_excluded = 0
     for s, p, o in examples:
         # TODO: we can revise this and instead encode all of these in the input, see if that improves performance
@@ -208,6 +226,7 @@ if __name__ == "__main__":
 
     # How often we'll report progress of GNN
     divisor = 200
+    divisor = 1  # Override to get more logs on big dataset
 
     # Implementing a form of early stopping. Keep track of the lowest loss
     # achieved, if we've had n epochs (to be specified) only achieving higher

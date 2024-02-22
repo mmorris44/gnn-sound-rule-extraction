@@ -1,3 +1,5 @@
+import random
+
 import rdflib as rdf
 
 
@@ -18,6 +20,24 @@ def parse_as_tsv(file):
         ent1, ent2, ent3 = line.split()
         dataset.append((ent1, ent2, ent3))
     return dataset
+
+
+def parse_from_full_train_file(file, graph_target_split=0.1):
+    # Use 10% for targets and other 90% for input, by default
+    # Only handles binary predicates
+    inputfile = open(file, "r")
+    lines = inputfile.readlines()
+    dataset = []
+    predicates = set()
+    for line in lines:
+        ent1, ent2, ent3 = line.split()
+        predicates.add(ent2)
+        dataset.append((ent1, ent2, ent3))
+    random.shuffle(dataset)
+    split_index = int(len(dataset) * graph_target_split)
+    targets = dataset[:split_index]
+    input_graph = dataset[split_index:]
+    return input_graph, targets, predicates
 
 
 def parse(file):
