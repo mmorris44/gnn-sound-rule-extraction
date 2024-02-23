@@ -61,7 +61,7 @@ if args.extraction_algorithm == 'stats':
         tot_negative += negative
         tot_zeroes += zeroes
         print(str(layer).ljust(5), 'A'.ljust(6),
-              "{:.2f}".format(positive), "{:.2f}".format(negative), "{:.2f}".format(zeroes), sep=' || ')
+              "{:.10f}".format(positive), "{:.10f}".format(negative), "{:.10f}".format(zeroes), sep=' || ')
 
         for colour in range(model.num_colours):
             matrix_b = model.matrix_B(layer, colour)
@@ -70,7 +70,7 @@ if args.extraction_algorithm == 'stats':
             tot_negative += negative
             tot_zeroes += zeroes
             print(str(layer).ljust(5), ('B_' + str(colour)).ljust(6),
-                  "{:.2f}".format(positive), "{:.2f}".format(negative), "{:.2f}".format(zeroes), sep=' || ')
+                  "{:.10f}".format(positive), "{:.10f}".format(negative), "{:.10f}".format(zeroes), sep=' || ')
 
     print('\nTotals:')
     print('Positive || Negative || Zero')
@@ -78,7 +78,7 @@ if args.extraction_algorithm == 'stats':
     tot_positive = tot_positive / total
     tot_negative = tot_negative / total
     tot_zeroes = tot_zeroes / total
-    print("{:.2f}".format(tot_positive), "{:.2f}".format(tot_negative), "{:.2f}".format(tot_zeroes), sep=' || ')
+    print("{:.10f}".format(tot_positive), "{:.10f}".format(tot_negative), "{:.10f}".format(tot_zeroes), sep=' || ')
 
 if args.extraction_algorithm == 'nabn':
     s0 = [0] * model.layer_dimension(0)

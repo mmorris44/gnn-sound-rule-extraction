@@ -226,7 +226,6 @@ if __name__ == "__main__":
 
     # How often we'll report progress of GNN
     divisor = 200
-    divisor = 1  # Override to get more logs on big dataset
 
     # Implementing a form of early stopping. Keep track of the lowest loss
     # achieved, if we've had n epochs (to be specified) only achieving higher
