@@ -13,6 +13,8 @@ import data_parser
 import os.path
 import rdflib as rdf
 from encoding_schemes import CanonicalEncoderDecoder, ICLREncoderDecoder
+from model_sparsity import weight_cutoff_model
+import gnn_architectures
 from utils import load_predicates
 
 parser = argparse.ArgumentParser(description="Evaluate a trained GNNs")
@@ -46,6 +48,10 @@ parser.add_argument('--iclr22-encoder-file',
 parser.add_argument('--print-entailed-facts',
                     default=None,
                     help='Print the facts that have been derived in the provided filename.')
+parser.add_argument('--weight-cutoff',
+                    help='Threshold size below which model weights are clamped to 0',
+                    default=0,
+                    type=float)
 args = parser.parse_args()
 
 
@@ -127,8 +133,12 @@ if __name__ == "__main__":
 
     print("Evaluating model {} on dataset {} using threshold={}".format(args.load_model_name,
                                                                         args.test_graph, args.threshold))
-    model = torch.load(args.load_model_name).to(device)
+    model: gnn_architectures.GNN = torch.load(args.load_model_name).to(device)
     model.eval()
+
+    # cutoff weights of model if specified
+    if args.weight_cutoff != 0:
+        weight_cutoff_model(model, args.weight_cutoff)
 
     # gnn_output : torch.FloatTensor of size i x j, with i = num graph nodes, j = length of feature vectors
     # importantly, the ith row of gnn_output and test_x represent the same node

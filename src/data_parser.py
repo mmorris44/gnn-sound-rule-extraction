@@ -43,8 +43,7 @@ def parse_from_full_train_file(file, graph_target_split=0.1):
 def parse(file):
     if file.endswith('.nt'):
         return parse_as_nt(file)
-    elif file.endswith('.tsv'):
+    elif file.endswith('.tsv') or file.endswith('.txt'):
         return parse_as_tsv(file)
     else:
-        print("Error, data format not supported. Use .nt or .tsv")
-        return None
+        assert False, "Error, data format not supported. Use .nt or .tsv (or .txt, interpreted as a .tsv file)"
