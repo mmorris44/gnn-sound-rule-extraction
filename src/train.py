@@ -57,7 +57,15 @@ parser.add_argument('--train-with-dummies',
                     action='store_true')
 parser.add_argument('--non-negative-weights',
                     choices=['True', 'False'],
-                    help='Restrict matrix weights so that they are non-monotonic')
+                    help='Restrict matrix weights so that they are all non-negative')
+parser.add_argument('--lr',
+                    default=0.01,
+                    type=float,
+                    help='Learning rate')
+parser.add_argument('--epochs',
+                    default=50000,
+                    type=int,
+                    help='Number of epochs to train for')
 args = parser.parse_args()
 
 saved_model_name = args.model_name
@@ -167,7 +175,7 @@ if __name__ == "__main__":
                 num_edge_colours=len(cd_binary_predicates),
                 aggregation=args.aggregation).to(device)
     # Select Adam as the optimisation algorithm
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-4)
 
     checkpoints_folder = args.model_folder + "/checkpoints"
     if not os.path.exists(checkpoints_folder):
@@ -237,13 +245,15 @@ if __name__ == "__main__":
 
     print("Training model {}.".format(args.model_name))
 
+    # TODO: keep track of 'best' model during training, i.e. one with lowest loss
+    # TODO: add argument for early stopping
     for epoch in range(50000):
         loss = train()
         if min_loss is None: min_loss = loss
         if epoch % divisor == 0:
             print('Epoch: {:03d}, Loss: {:.5f}'.
                   format(epoch, loss))
-            if epoch % 1000 == 0:
+            if (epoch + 1) % 1000 == 0:
                 torch.save(model,
                            checkpoints_folder + '/' +
                            "{}_Epoch{}.pt".format(args.model_name, epoch))
