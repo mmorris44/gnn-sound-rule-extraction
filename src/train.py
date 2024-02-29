@@ -3,6 +3,7 @@
 """
 @author: ----
 """
+import random
 
 import torch
 from torch_geometric.data import Data, DataLoader
@@ -66,11 +67,26 @@ parser.add_argument('--epochs',
                     default=50000,
                     type=int,
                     help='Number of epochs to train for')
+parser.add_argument('--checkpoint-interval',
+                    default=9999999,
+                    type=int,
+                    help='How many epochs between model checkpoints')
+parser.add_argument('--seed',
+                    default=-1,  # -1 seed means seed will be chosen at random
+                    type=int,
+                    help='Seed used to init RNG')
 args = parser.parse_args()
 
 saved_model_name = args.model_name
 
 if __name__ == "__main__":
+    # Init RNG
+    seed = args.seed
+    if seed == -1:
+        seed = random.randint(1, 10000)
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -233,7 +249,7 @@ if __name__ == "__main__":
     # Train for a maximum of 50000 epochs, but expect to stop early
 
     # How often we'll report progress of GNN
-    divisor = 200
+    divisor = args.checkpoint_interval
 
     # Implementing a form of early stopping. Keep track of the lowest loss
     # achieved, if we've had n epochs (to be specified) only achieving higher
@@ -247,9 +263,10 @@ if __name__ == "__main__":
 
     # TODO: keep track of 'best' model during training, i.e. one with lowest loss
     # TODO: add argument for early stopping
-    for epoch in range(50000):
+    for epoch in range(args.epochs):
         loss = train()
-        if min_loss is None: min_loss = loss
+        if min_loss is None:
+            min_loss = loss
         if epoch % divisor == 0:
             print('Epoch: {:03d}, Loss: {:.5f}'.
                   format(epoch, loss))
