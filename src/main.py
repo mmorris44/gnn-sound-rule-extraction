@@ -37,6 +37,7 @@ log_infer_patterns = [
 ]
 
 parser = argparse.ArgumentParser(description="Main file for running experiments")
+# Training
 parser.add_argument('--dataset',
                     choices=link_prediction_datasets + node_classification_datasets + log_infer_datasets,
                     help='Name of the dataset')
@@ -64,7 +65,17 @@ parser.add_argument('--checkpoint-interval',
                     default=9999999,
                     type=int,
                     help='How many epochs between model checkpoints')
+
+# Testing
+parser.add_argument('--evaluation-set',
+                    default='valid',
+                    choices=['valid', 'test'],
+                    help='Whether you should evaluate on the validation or test set')
 args = parser.parse_args()
+
+#
+# TRAINING
+#
 
 model_name = '{}_layers_{}_lr_{}_seed_{}'.format(args.dataset, args.layers, args.lr, args.seed)
 model_folder = '../models'
@@ -74,21 +85,24 @@ aggregation = 'sum'
 non_negative_weights = 'False'
 
 train_graph, train_examples, train_file_full = None, None, None
+negative_sampling_method = 'rb'  # Fixed negative sampling for LogInfer datasets
 
 if args.dataset in node_classification_datasets:
     encoding_scheme = 'canonical'
-    train_graph = '../data/{}/{}/graph.nt'.format('node_classification', args.dataset)
-    train_examples = '../data/{}/{}/train.tsv'.format('link_prediction', args.dataset)
+    path_to_dataset = '../data/{}/{}'.format('node_classification', args.dataset)
+    train_graph = '{}/graph.nt'.format(path_to_dataset)
+    train_examples = '{}/train.tsv'.format(path_to_dataset)
 elif args.dataset in link_prediction_datasets:
     encoding_scheme = 'iclr22'
-    train_graph = '../data/{}/{}/train_graph.tsv'.format('link_prediction', args.dataset)
-    train_examples = '../data/{}/{}/train_pos.tsv'.format('link_prediction', args.dataset)
+    path_to_dataset = '../data/{}/{}'.format('link_prediction', args.dataset)
+    train_graph = '{}/train_graph.tsv'.format(path_to_dataset)
+    train_examples = '{}/train_pos.tsv'.format(path_to_dataset)
 elif args.dataset in log_infer_datasets:
     encoding_scheme = 'iclr22'
-    negative_sampling_method = 'rb'  # Fixed
-    train_file_full = '../data/LogInfer/LogInfer-benchmark/{}-{}-{}/train.txt'.format(
+    path_to_dataset = '../data/LogInfer/LogInfer-benchmark/{}-{}-{}'.format(
         args.dataset, args.log_infer_pattern, negative_sampling_method
     )
+    train_file_full = '{}/train.txt'.format(path_to_dataset)
     model_name = '{}-{}-{}_layers_{}_lr_{}_seed_{}'.format(
         args.dataset, args.log_infer_pattern, negative_sampling_method, args.layers, args.lr, args.seed
     )
@@ -122,4 +136,34 @@ else:
 print("Training...")
 subprocess.run(train_command)
 
-final_model_path = '{}/{}.pt'.format(model_folder, model_name)
+#
+# TESTING
+#
+load_model_name = '{}/{}.pt'.format(model_folder, model_name)
+threshold = 0  # Fix at zero for now. TODO: change way threshold is used in test file.
+weight_cutoff = 0  # TODO: range over various weight cutoffs
+test_graph = train_file_full  # TODO: handle non-Log-Infer datasets as well
+# TODO: convert all in file to format strings, as below: in future commit
+test_positive_examples = f'{path_to_dataset}/{args.evaluation_set}.txt'
+test_negative_examples = f'{path_to_dataset}/{args.evaluation_set}_neg_{negative_sampling_method}.txt'
+output = f'../metrics/{model_name}_cutoff_{weight_cutoff}.txt'
+canonical_encoder_file = f'../encoders/{model_name}_canonical.tsv'
+iclr22_encoder_file = f'../encoders/{model_name}_iclr22.tsv'
+
+test_command = [
+    'python',
+    'test.py',
+    '--load-model-name', load_model_name,
+    '--threshold', threshold,
+    '--weight-cutoff', weight_cutoff,
+    '--test-graph', test_graph,
+    '--test-positive-examples', test_positive_examples,
+    '--test-negative-examples', test_negative_examples,
+    '--output', output,
+    '--encoding-scheme', encoding_scheme,
+    '--canonical-encoder-file', canonical_encoder_file,
+    '--iclr22-encoder-file', iclr22_encoder_file,
+]
+
+print("Testing...")
+subprocess.run(test_command)

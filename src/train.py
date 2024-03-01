@@ -3,6 +3,7 @@
 """
 @author: ----
 """
+import copy
 import random
 
 import torch
@@ -59,6 +60,10 @@ parser.add_argument('--train-with-dummies',
 parser.add_argument('--non-negative-weights',
                     choices=['True', 'False'],
                     help='Restrict matrix weights so that they are all non-negative')
+parser.add_argument('--early-stop',
+                    default=50,  # -1 means no early stopping
+                    type=int,
+                    help='Number of epochs with worse loss than best epoch before early stopping')
 parser.add_argument('--lr',
                     default=0.01,
                     type=float,
@@ -71,6 +76,10 @@ parser.add_argument('--checkpoint-interval',
                     default=9999999,
                     type=int,
                     help='How many epochs between model checkpoints')
+parser.add_argument('--log-interval',
+                    default=1,
+                    type=int,
+                    help='How many epochs between model logs')
 parser.add_argument('--seed',
                     default=-1,  # -1 seed means seed will be chosen at random
                     type=int,
@@ -249,7 +258,7 @@ if __name__ == "__main__":
     # Train for a maximum of 50000 epochs, but expect to stop early
 
     # How often we'll report progress of GNN
-    divisor = args.checkpoint_interval
+    divisor = args.log_interval
 
     # Implementing a form of early stopping. Keep track of the lowest loss
     # achieved, if we've had n epochs (to be specified) only achieving higher
@@ -257,12 +266,13 @@ if __name__ == "__main__":
     min_loss = None
     num_bad_iterations = 0
     # Maximum number of epochs reporting higher loss than lowest achieved before we stop early
-    max_num_bad = 50
+    max_num_bad = args.early_stop
+
+    # track model with the lowest loss found during training
+    best_model = model
 
     print("Training model {}.".format(args.model_name))
 
-    # TODO: keep track of 'best' model during training, i.e. one with lowest loss
-    # TODO: add argument for early stopping
     for epoch in range(args.epochs):
         loss = train()
         if min_loss is None:
@@ -270,7 +280,7 @@ if __name__ == "__main__":
         if epoch % divisor == 0:
             print('Epoch: {:03d}, Loss: {:.5f}'.
                   format(epoch, loss))
-            if (epoch + 1) % 1000 == 0:
+            if (epoch + 1) % args.checkpoint_interval == 0:
                 torch.save(model,
                            checkpoints_folder + '/' +
                            "{}_Epoch{}.pt".format(args.model_name, epoch))
@@ -280,7 +290,8 @@ if __name__ == "__main__":
                 print("Stopping early")
                 break
         else:
+            best_model = copy.deepcopy(model)
             num_bad_iterations = 0
             min_loss = loss
 
-    torch.save(model, args.model_folder + '/' + saved_model_name + '.pt')
+    torch.save(best_model, args.model_folder + '/' + saved_model_name + '.pt')
