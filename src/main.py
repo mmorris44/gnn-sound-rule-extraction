@@ -77,37 +77,34 @@ args = parser.parse_args()
 # TRAINING
 #
 
-model_name = '{}_layers_{}_lr_{}_seed_{}'.format(args.dataset, args.layers, args.lr, args.seed)
+model_name = f'{args.dataset}_layers_{args.layers}_lr_{args.lr}_seed_{args.seed}'  # Overwritten for LogInfer
 model_folder = '../models'
-predicates = '../data/{}/{}/predicates.csv'.format('link_prediction', args.dataset)
 encoder_folder = '../encoders'
 aggregation = 'sum'
 non_negative_weights = 'False'
 
-train_graph, train_examples, train_file_full = None, None, None
+train_graph, train_examples, predicates, train_file_full = None, None, None, None
 negative_sampling_method = 'rb'  # Fixed negative sampling for LogInfer datasets
 
 if args.dataset in node_classification_datasets:
     encoding_scheme = 'canonical'
-    path_to_dataset = '../data/{}/{}'.format('node_classification', args.dataset)
-    train_graph = '{}/graph.nt'.format(path_to_dataset)
-    train_examples = '{}/train.tsv'.format(path_to_dataset)
+    path_to_dataset = f'../data/node_classification/{args.dataset}'
+    train_graph = f'{path_to_dataset}/graph.nt'
+    train_examples = f'{path_to_dataset}/train.tsv'
+    predicates = f'{path_to_dataset}/predicates.csv'
 elif args.dataset in link_prediction_datasets:
     encoding_scheme = 'iclr22'
-    path_to_dataset = '../data/{}/{}'.format('link_prediction', args.dataset)
-    train_graph = '{}/train_graph.tsv'.format(path_to_dataset)
-    train_examples = '{}/train_pos.tsv'.format(path_to_dataset)
+    path_to_dataset = f'../data/link_prediction/{args.dataset}'
+    train_graph = f'{path_to_dataset}/train_graph.tsv'
+    train_examples = f'{path_to_dataset}/train_pos.tsv'
+    predicates = f'{path_to_dataset}/predicates.csv'
 elif args.dataset in log_infer_datasets:
     encoding_scheme = 'iclr22'
-    path_to_dataset = '../data/LogInfer/LogInfer-benchmark/{}-{}-{}'.format(
-        args.dataset, args.log_infer_pattern, negative_sampling_method
-    )
-    train_file_full = '{}/train.txt'.format(path_to_dataset)
-    model_name = '{}-{}-{}_layers_{}_lr_{}_seed_{}'.format(
-        args.dataset, args.log_infer_pattern, negative_sampling_method, args.layers, args.lr, args.seed
-    )
+    path_to_dataset = f'../data/LogInfer/LogInfer-benchmark/{args.dataset}-{args.log_infer_pattern}-{negative_sampling_method}'
+    train_file_full = f'{path_to_dataset}/train.txt'
+    model_name = f'{args.dataset}-{args.log_infer_pattern}-{negative_sampling_method}_layers_{args.layers}_lr_{args.lr}_seed_{args.seed}'
 else:
-    assert False, 'Dataset "{}" not recognized'.format(args.dataset)
+    assert False, f'Dataset "{args.dataset}" not recognized'
 
 train_command = [
     'python',
@@ -139,7 +136,7 @@ subprocess.run(train_command)
 #
 # TESTING
 #
-load_model_name = '{}/{}.pt'.format(model_folder, model_name)
+load_model_name = f'{model_folder}/{model_name}.pt'
 threshold = 0  # Fix at zero for now. TODO: change way threshold is used in test file.
 weight_cutoff = 0  # TODO: range over various weight cutoffs
 test_graph = train_file_full  # TODO: handle non-Log-Infer datasets as well
