@@ -139,10 +139,19 @@ subprocess.run(train_command)
 load_model_name = f'{model_folder}/{model_name}.pt'
 threshold = 0  # Fix at zero for now. TODO: change way threshold is used in test file.
 weight_cutoff = 0  # TODO: range over various weight cutoffs
-test_graph = train_file_full  # TODO: handle non-Log-Infer datasets as well
-# TODO: convert all in file to format strings, as below: in future commit
-test_positive_examples = f'{path_to_dataset}/{args.evaluation_set}.txt'
-test_negative_examples = f'{path_to_dataset}/{args.evaluation_set}_neg_{negative_sampling_method}.txt'
+if args.dataset in node_classification_datasets:
+    assert args.evaluation_set == 'test', f'Only the test set exists for {args.dataset}, not the valid set'
+    test_graph = f'{path_to_dataset}/test.tsv'
+    test_positive_examples = f'{path_to_dataset}/test_pos.tsv'
+    test_negative_examples = f'{path_to_dataset}/test_neg.tsv'
+elif args.dataset in link_prediction_datasets:
+    test_graph = f'{path_to_dataset}/{args.evaluation_set}_graph.tsv'
+    test_positive_examples = f'{path_to_dataset}/{args.evaluation_set}_pos.tsv'
+    test_negative_examples = f'{path_to_dataset}/{args.evaluation_set}_neg.tsv'
+else:  # log_infer_datasets:
+    test_graph = train_file_full
+    test_positive_examples = f'{path_to_dataset}/{args.evaluation_set}.txt'
+    test_negative_examples = f'{path_to_dataset}/{args.evaluation_set}_neg_{negative_sampling_method}.txt'
 output = f'../metrics/{model_name}_cutoff_{weight_cutoff}.txt'
 canonical_encoder_file = f'../encoders/{model_name}_canonical.tsv'
 iclr22_encoder_file = f'../encoders/{model_name}_iclr22.tsv'
