@@ -14,8 +14,8 @@ link_prediction_datasets = [
     'nellv2',
     'nellv3',
     'nellv4',
-    'grail',
-    'kinship',
+    # 'grail',  # exclude for now, since not established benchmark and file structure is different
+    # 'kinship',  # exclude for now, different file structure
 ]
 
 node_classification_datasets = [
@@ -65,6 +65,10 @@ parser.add_argument('--checkpoint-interval',
                     default=9999999,
                     type=int,
                     help='How many epochs between model checkpoints')
+parser.add_argument('--log-interval',
+                    default=1,
+                    type=int,
+                    help='How many epochs between model logs')
 
 # Testing
 parser.add_argument('--evaluation-set',
@@ -115,8 +119,12 @@ train_command = [
     '--encoder-folder', encoder_folder,
     '--aggregation', aggregation,
     '--non-negative-weights', non_negative_weights,
-    '--layers', args.layers,
-    '--lr', args.lr,
+    '--layers', str(args.layers),
+    '--lr', str(args.lr),
+    '--seed', str(args.seed),
+    '--epochs', str(args.epochs),
+    '--checkpoint-interval', str(args.checkpoint_interval),
+    '--log-interval', str(args.log_interval),
 ]
 
 if args.dataset in log_infer_datasets:
@@ -160,8 +168,8 @@ test_command = [
     'python',
     'test.py',
     '--load-model-name', load_model_name,
-    '--threshold', threshold,
-    '--weight-cutoff', weight_cutoff,
+    '--threshold', str(threshold),
+    '--weight-cutoff', str(weight_cutoff),
     '--test-graph', test_graph,
     '--test-positive-examples', test_positive_examples,
     '--test-negative-examples', test_negative_examples,

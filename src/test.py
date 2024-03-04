@@ -243,6 +243,7 @@ if __name__ == "__main__":
     print("Total examples: {}".format(counter_all))
     print("Scored examples: {}".format(counter_scored))
 
+    print('Writing test results to:', args.output)
     with open(args.output, 'w') as f:
         f.write("Threshold" + '\t' + "Precision" + '\t' + "Recall" + '\t' + "Accuracy" + '\t' + "F1 Score" + '\n')
         for threshold in threshold_to_counter:
