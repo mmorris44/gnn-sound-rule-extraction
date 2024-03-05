@@ -5,6 +5,7 @@
 """
 import copy
 import random
+import wandb
 
 import torch
 from torch_geometric.data import Data, DataLoader
@@ -84,11 +85,20 @@ parser.add_argument('--seed',
                     default=-1,  # -1 seed means seed will be chosen at random
                     type=int,
                     help='Seed used to init RNG')
+parser.add_argument('--use-wandb',
+                    type=int,
+                    choices=[0, 1],
+                    default=0,
+                    help='Log to wandb?')
 args = parser.parse_args()
 
 saved_model_name = args.model_name
 
 if __name__ == "__main__":
+    # init logging
+    if args.use_wandb:
+        wandb.init(project='sound-rule-extraction')
+
     # Init RNG
     seed = args.seed
     if seed == -1:
@@ -280,6 +290,12 @@ if __name__ == "__main__":
         if epoch % divisor == 0:
             print('Epoch: {:03d}, Loss: {:.5f}'.
                   format(epoch, loss))
+            if args.use_wandb:
+                wandb.log({
+                    'epoch': epoch + 1,
+                    'loss': loss,
+                }, step=epoch + 1)
+
             if (epoch + 1) % args.checkpoint_interval == 0:
                 torch.save(model,
                            checkpoints_folder + '/' +
@@ -295,3 +311,6 @@ if __name__ == "__main__":
             min_loss = loss
 
     torch.save(best_model, args.model_folder + '/' + saved_model_name + '.pt')
+
+    if args.use_wandb:
+        wandb.finish()

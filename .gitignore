@@ -5,3 +5,4 @@ __pycache__
 models
 encoders
 metrics
+wandb

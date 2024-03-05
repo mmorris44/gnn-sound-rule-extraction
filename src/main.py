@@ -29,7 +29,7 @@ log_infer_datasets = [
 ]
 
 log_infer_patterns = [
-    'comp',
+    # 'comp',  # not tree-like, cannot be checked
     'hier',
     'inter',
     'inver'
@@ -37,6 +37,7 @@ log_infer_patterns = [
 ]
 
 parser = argparse.ArgumentParser(description="Main file for running experiments")
+
 # Training
 parser.add_argument('--dataset',
                     choices=link_prediction_datasets + node_classification_datasets + log_infer_datasets,
@@ -75,6 +76,14 @@ parser.add_argument('--evaluation-set',
                     default='valid',
                     choices=['valid', 'test'],
                     help='Whether you should evaluate on the validation or test set')
+
+# Logging
+parser.add_argument('--use-wandb',
+                    type=int,
+                    choices=[0, 1],
+                    default=0,
+                    help='Log to wandb?')
+
 args = parser.parse_args()
 
 #
@@ -125,6 +134,7 @@ train_command = [
     '--epochs', str(args.epochs),
     '--checkpoint-interval', str(args.checkpoint_interval),
     '--log-interval', str(args.log_interval),
+    '--use-wandb', str(args.use_wandb),
 ]
 
 if args.dataset in log_infer_datasets:
@@ -177,6 +187,7 @@ test_command = [
     '--encoding-scheme', encoding_scheme,
     '--canonical-encoder-file', canonical_encoder_file,
     '--iclr22-encoder-file', iclr22_encoder_file,
+    '--use-wandb', str(args.use_wandb),
 ]
 
 print("Testing...")

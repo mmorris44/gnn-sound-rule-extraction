@@ -3,7 +3,9 @@
 """
 @author: ----
 """
+
 import torch
+import wandb
 from torch_geometric.data import Data
 from numpy import arange
 from numpy import trapz
@@ -52,6 +54,11 @@ parser.add_argument('--weight-cutoff',
                     help='Threshold size below which model weights are clamped to 0',
                     default=0,
                     type=float)
+parser.add_argument('--use-wandb',
+                    type=int,
+                    choices=[0, 1],
+                    default=0,
+                    help='Log to wandb?')
 args = parser.parse_args()
 
 
@@ -61,6 +68,7 @@ def precision(tp, fp, tn, fn):
         value = tp / (tp + fp)
     except:
         value = float("NaN")
+        value = 0  # For now, plot NaNs as zeroes
     finally:
         return value
 
@@ -71,6 +79,7 @@ def recall(tp, fp, tn, fn):
         value = tp / (tp + fn)
     except:
         value = float("NaN")
+        value = 0  # For now, plot NaNs as zeroes
     finally:
         return value
 
@@ -81,6 +90,7 @@ def accuracy(tp, fp, tn, fn):
         value = (tn + tp) / (tp + fp + tn + fn)
     except:
         value = float("NaN")
+        value = 0  # For now, plot NaNs as zeroes
     finally:
         return value
 
@@ -91,6 +101,7 @@ def f1score(tp, fp, tn, fn):
         value = tp / (tp + 0.5 * (fp + fn))
     except:
         value = float("NaN")
+        value = 0  # For now, plot NaNs as zeroes
     finally:
         return value
 
@@ -111,6 +122,9 @@ def parse_triple(line):
 
 
 if __name__ == "__main__":
+    # init logging
+    if args.use_wandb:
+        wandb.init(project='sound-rule-extraction')
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -168,8 +182,7 @@ if __name__ == "__main__":
                 output2.write("{}\t{}\t{}\t{}\n".format(s, p, o, score))
         output.close()
 
-    threshold_list = [0.0000000001, 0.000000001, 0.000000001, 0.00000001, 0.0000001, 0.000001, 0.00001, 0.0001, 0.001] \
-                     + arange(0.01, 1, 0.01).tolist()
+    threshold_list = [1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3] + arange(0.01, 1, 0.01).tolist()
     threshold_list = [round(elem, 10) for elem in threshold_list]
     number_of_positives = 0
     number_of_negatives = 0
@@ -248,11 +261,21 @@ if __name__ == "__main__":
         f.write("Threshold" + '\t' + "Precision" + '\t' + "Recall" + '\t' + "Accuracy" + '\t' + "F1 Score" + '\n')
         for threshold in threshold_to_counter:
             tp, fp, tn, fn = threshold_to_counter[threshold]
-            f.write("{}\t{}\t{}\t{}\t{}\n".format(threshold, precision(tp, fp, tn, fn),
-                                                  recall(tp, fp, tn, fn), accuracy(tp, fp, tn, fn),
-                                                  f1score(tp, fp, tn, fn)))
-            recall_vector.append(recall(tp, fp, tn, fn))
-            precision_vector.append(precision(tp, fp, tn, fn))
+            precision_v = precision(tp, fp, tn, fn)
+            recall_v = recall(tp, fp, tn, fn)
+            accuracy_v = accuracy(tp, fp, tn, fn)
+            f1score_v = f1score(tp, fp, tn, fn)
+            f.write("{}\t{}\t{}\t{}\t{}\n".format(threshold, precision_v, recall_v, accuracy_v, f1score_v))
+            if args.use_wandb:
+                wandb.log({
+                    'threshold': threshold,
+                    'precision': precision_v,
+                    'recall': recall_v,
+                    'accuracy': accuracy_v,
+                    'f1score': f1score_v,
+                })
+            recall_vector.append(recall_v)
+            precision_vector.append(precision_v)
         # Add extremal points for AUC. This ensures a perfect classifier has AUC 1, a random classifier has AUC 0.5,
         # and an `always wrong' classifier has an AUC 0.
         # Without this, a perfect classifier would have a score of 0!!
@@ -266,3 +289,6 @@ if __name__ == "__main__":
         f.write("Area under precision recall curve: {}\n".format(auprc(precision_vector, recall_vector)))
 
     f.close()
+
+    if args.use_wandb:
+        wandb.finish()
