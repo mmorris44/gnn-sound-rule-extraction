@@ -66,10 +66,16 @@ parser.add_argument('--checkpoint-interval',
                     default=9999999,
                     type=int,
                     help='How many epochs between model checkpoints')
-parser.add_argument('--log-interval',
-                    default=1,
+parser.add_argument('--train',
                     type=int,
-                    help='How many epochs between model logs')
+                    choices=[0, 1],
+                    default=0,
+                    help='If 0, the script will not train a new model, but fetch an existing trained model')
+parser.add_argument('--test',
+                    type=int,
+                    choices=[0, 1],
+                    default=0,
+                    help='If 0, the script will not test the model, merely train it')
 
 # Testing
 parser.add_argument('--evaluation-set',
@@ -83,6 +89,10 @@ parser.add_argument('--use-wandb',
                     choices=[0, 1],
                     default=0,
                     help='Log to wandb?')
+parser.add_argument('--log-interval',
+                    default=1,
+                    type=int,
+                    help='How many epochs between model logs')
 
 args = parser.parse_args()
 
@@ -148,8 +158,9 @@ else:
         '--predicates', predicates,
     ]
 
-print("Training...")
-subprocess.run(train_command)
+if args.train:
+    print("Training...")
+    subprocess.run(train_command)
 
 #
 # TESTING
@@ -190,5 +201,6 @@ test_command = [
     '--use-wandb', str(args.use_wandb),
 ]
 
-print("Testing...")
-subprocess.run(test_command)
+if args.test:
+    print("Testing...")
+    subprocess.run(test_command)
