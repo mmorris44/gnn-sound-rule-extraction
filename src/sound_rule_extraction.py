@@ -251,6 +251,7 @@ if args.extraction_algorithm == 'neg-inf-line':
         # track current value of latest reached node
         # x, y in (x + dy)
         neighbour_x_value = torch.zeros(model.layer_dimension(0))  # set initial x-component to 0
+        # TODO: do we actually need to track the x_value? Seems like not
         neighbour_y_value = torch.clone(initial_value)  # set y-component to initial value
         current_unreached_value = torch.clone(initial_value)  # tracks current value of an unreached node in the line
 
@@ -285,7 +286,7 @@ if args.extraction_algorithm == 'neg-inf-line':
                 torch.matmul(model.matrix_A(layer), current_unreached_value)
                 + model.bias(layer)
                 + torch.matmul(model.matrix_B(layer, colour_sequence[layer - 1]), current_unreached_value)
-            )
+            )  # TODO: using wrong colour values here
 
         # Compute final values that will be passed
         y_value = torch.matmul(model.matrix_B(model.num_layers, colour_sequence[model.num_layers - 1]), neighbour_y_value)

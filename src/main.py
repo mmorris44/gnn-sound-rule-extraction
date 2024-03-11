@@ -160,6 +160,7 @@ else:
 
 if args.train:
     print("Training...")
+    print('Running command:', train_command)
     subprocess.run(train_command)
 
 #
@@ -203,4 +204,5 @@ test_command = [
 
 if args.test:
     print("Testing...")
+    print('Running command:', test_command)
     subprocess.run(test_command)
