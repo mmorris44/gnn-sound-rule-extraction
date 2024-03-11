@@ -82,6 +82,11 @@ parser.add_argument('--evaluation-set',
                     default='valid',
                     choices=['valid', 'test'],
                     help='Whether you should evaluate on the validation or test set')
+parser.add_argument('--threshold',
+                    type=float,
+                    default=0,
+                    help='Threshold of the GNN.'
+                         'Threshold = 0 means threshold list used. Threshold != 0 only uses given threshold')
 
 # Logging
 parser.add_argument('--use-wandb',
@@ -202,6 +207,7 @@ test_command = [
     '--canonical-encoder-file', canonical_encoder_file,
     '--iclr22-encoder-file', iclr22_encoder_file,
     '--use-wandb', str(args.use_wandb),
+    '--threshold', str(args.threshold),
 ]
 
 if args.test:

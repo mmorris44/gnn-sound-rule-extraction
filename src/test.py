@@ -183,7 +183,11 @@ if __name__ == "__main__":
         output.close()
 
     threshold_list = [1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3] + arange(0.01, 1, 0.01).tolist()
+    # If threshold was specified (i.e. not 0), then only use the given threshold
+    if args.threshold != 0:
+        threshold_list = [args.threshold]
     threshold_list = [round(elem, 10) for elem in threshold_list]
+
     number_of_positives = 0
     number_of_negatives = 0
     counter_all = 0
