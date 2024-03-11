@@ -182,7 +182,7 @@ if __name__ == "__main__":
                 output2.write("{}\t{}\t{}\t{}\n".format(s, p, o, score))
         output.close()
 
-    threshold_list = [0, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3] + arange(0.01, 1, 0.01).tolist()
+    threshold_list = [1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3] + arange(0.01, 1, 0.01).tolist()
     # If threshold was specified (i.e. not 0), then only use the given threshold
     if args.threshold != 0:
         threshold_list = [args.threshold]
@@ -193,7 +193,7 @@ if __name__ == "__main__":
     counter_all = 0
     counter_scored = 0
     # Each threshold is mapped to a 4-tuple containing true and false positives and negatives.
-    threshold_to_counter = {}
+    threshold_to_counter = {0: [0, 0, 0, 0]}
     for threshold in threshold_list:
         threshold_to_counter[threshold] = [0, 0, 0, 0]
     entry_for = {"true_positives": 0, "false_positives": 1, "true_negatives": 2, "false_negatives": 3}
@@ -263,7 +263,10 @@ if __name__ == "__main__":
     print('Writing test results to:', args.output)
     with open(args.output, 'w') as f:
         f.write("Threshold" + '\t' + "Precision" + '\t' + "Recall" + '\t' + "Accuracy" + '\t' + "F1 Score" + '\n')
-        for threshold in threshold_to_counter:
+        threshold_iter = threshold_to_counter
+        if args.threshold != 0:
+            threshold_iter = threshold_list  # Only evaluate on the single threshold if it is given
+        for threshold in threshold_iter:
             tp, fp, tn, fn = threshold_to_counter[threshold]
             precision_v = precision(tp, fp, tn, fn)
             recall_v = recall(tp, fp, tn, fn)
