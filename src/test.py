@@ -286,7 +286,10 @@ if __name__ == "__main__":
         # Get rid of NaNs
         recall_vector = nan_to_num(recall_vector)
         precision_vector = nan_to_num(precision_vector)
-        f.write("Area under precision recall curve: {}\n".format(auprc(precision_vector, recall_vector)))
+        auprc_v = auprc(precision_vector, recall_vector)
+        f.write("Area under precision recall curve: {}\n".format(auprc_v))
+        if args.use_wandb:
+            wandb.log({'auprc': auprc_v})
 
     f.close()
 

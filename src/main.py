@@ -122,6 +122,8 @@ elif args.dataset in link_prediction_datasets:
     train_examples = f'{path_to_dataset}/train_pos.tsv'
     predicates = f'{path_to_dataset}/predicates.csv'
 elif args.dataset in log_infer_datasets:
+    assert not (args.dataset == 'LogInfer-WN' and args.log_infer_pattern == 'inter'),\
+        'LogInfer pattern "inter" not supported for dataset "LogInfer-WN"'
     encoding_scheme = 'iclr22'
     path_to_dataset = f'../data/LogInfer/LogInfer-benchmark/{args.dataset}-{args.log_infer_pattern}-{negative_sampling_method}'
     train_file_full = f'{path_to_dataset}/train.txt'
