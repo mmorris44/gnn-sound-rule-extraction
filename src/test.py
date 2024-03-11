@@ -182,7 +182,7 @@ if __name__ == "__main__":
                 output2.write("{}\t{}\t{}\t{}\n".format(s, p, o, score))
         output.close()
 
-    threshold_list = [1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3] + arange(0.01, 1, 0.01).tolist()
+    threshold_list = [0, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3] + arange(0.01, 1, 0.01).tolist()
     # If threshold was specified (i.e. not 0), then only use the given threshold
     if args.threshold != 0:
         threshold_list = [args.threshold]
@@ -193,7 +193,7 @@ if __name__ == "__main__":
     counter_all = 0
     counter_scored = 0
     # Each threshold is mapped to a 4-tuple containing true and false positives and negatives.
-    threshold_to_counter = {0: [0, 0, 0, 0]}
+    threshold_to_counter = {}
     for threshold in threshold_list:
         threshold_to_counter[threshold] = [0, 0, 0, 0]
     entry_for = {"true_positives": 0, "false_positives": 1, "true_negatives": 2, "false_negatives": 3}
