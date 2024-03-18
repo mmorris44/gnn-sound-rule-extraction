@@ -87,6 +87,10 @@ parser.add_argument('--threshold',
                     default=0,
                     help='Threshold of the GNN.'
                          'Threshold = 0 means threshold list used. Threshold != 0 only uses given threshold')
+parser.add_argument('--negative-sampling-method',
+                    default='rb',
+                    choices=['rb', 'rc'],
+                    help='Negative sampling method for evaluation')
 
 # Logging
 parser.add_argument('--use-wandb',
@@ -112,7 +116,6 @@ aggregation = 'sum'
 non_negative_weights = 'False'
 
 train_graph, train_examples, predicates, train_file_full = None, None, None, None
-negative_sampling_method = 'rb'  # Fixed negative sampling for LogInfer datasets
 
 if args.dataset in node_classification_datasets:
     encoding_scheme = 'canonical'
@@ -130,9 +133,9 @@ elif args.dataset in log_infer_datasets:
     assert not (args.dataset == 'LogInfer-WN' and args.log_infer_pattern == 'inter'),\
         'LogInfer pattern "inter" not supported for dataset "LogInfer-WN"'
     encoding_scheme = 'iclr22'
-    path_to_dataset = f'../data/LogInfer/LogInfer-benchmark/{args.dataset}-{args.log_infer_pattern}-{negative_sampling_method}'
+    path_to_dataset = f'../data/LogInfer/LogInfer-benchmark/{args.dataset}-{args.log_infer_pattern}-{args.negative_sampling_method}'
     train_file_full = f'{path_to_dataset}/train.txt'
-    model_name = f'{args.dataset}-{args.log_infer_pattern}-{negative_sampling_method}_layers_{args.layers}_lr_{args.lr}_seed_{args.seed}'
+    model_name = f'{args.dataset}-{args.log_infer_pattern}-{args.negative_sampling_method}_layers_{args.layers}_lr_{args.lr}_seed_{args.seed}'
 else:
     assert False, f'Dataset "{args.dataset}" not recognized'
 
@@ -188,7 +191,7 @@ elif args.dataset in link_prediction_datasets:
 else:  # log_infer_datasets:
     test_graph = train_file_full
     test_positive_examples = f'{path_to_dataset}/{args.evaluation_set}.txt'
-    test_negative_examples = f'{path_to_dataset}/{args.evaluation_set}_neg_{negative_sampling_method}.txt'
+    test_negative_examples = f'{path_to_dataset}/{args.evaluation_set}_neg_{args.negative_sampling_method}.txt'
 output = f'../metrics/{model_name}_cutoff_{weight_cutoff}.txt'
 canonical_encoder_file = f'../encoders/{model_name}_canonical.tsv'
 iclr22_encoder_file = f'../encoders/{model_name}_iclr22.tsv'
