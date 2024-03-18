@@ -89,7 +89,7 @@ parser.add_argument('--threshold',
                          'Threshold = 0 means threshold list used. Threshold != 0 only uses given threshold')
 parser.add_argument('--negative-sampling-method',
                     default='rb',
-                    choices=['rb', 'rc'],
+                    choices=['rb', 'rc', 'pc'],
                     help='Negative sampling method for evaluation')
 
 # Logging
