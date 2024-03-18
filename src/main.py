@@ -133,9 +133,10 @@ elif args.dataset in log_infer_datasets:
     assert not (args.dataset == 'LogInfer-WN' and args.log_infer_pattern == 'inter'),\
         'LogInfer pattern "inter" not supported for dataset "LogInfer-WN"'
     encoding_scheme = 'iclr22'
-    path_to_dataset = f'../data/LogInfer/LogInfer-benchmark/{args.dataset}-{args.log_infer_pattern}-{args.negative_sampling_method}'
+    path_to_dataset = f'../data/LogInfer/LogInfer-benchmark/{args.dataset}-{args.log_infer_pattern}'
     train_file_full = f'{path_to_dataset}/train.txt'
-    model_name = f'{args.dataset}-{args.log_infer_pattern}-{args.negative_sampling_method}_layers_{args.layers}_lr_{args.lr}_seed_{args.seed}'
+    # 'rb' hard coded into model name for now, to access old trained models. TODO: remove from model name entirely
+    model_name = f'{args.dataset}-{args.log_infer_pattern}-rb_layers_{args.layers}_lr_{args.lr}_seed_{args.seed}'
 else:
     assert False, f'Dataset "{args.dataset}" not recognized'
 
