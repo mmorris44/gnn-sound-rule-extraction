@@ -106,7 +106,7 @@ parser.add_argument('--rule-channels-min-ratio',
                          'If -1, then no weight cutoff is used.')
 
 # Rule extraction
-parser.add_argument('--sound-extract',
+parser.add_argument('--extract',
                     type=int,
                     choices=[0, 1],
                     default=0,
@@ -251,6 +251,7 @@ if args.test:
             model,
             args.rule_channels_min_ratio,
         )
+        print(f'Cutoff {weight_cutoff} found')
         test_command = test_command + [
             '--weight-cutoff', str(weight_cutoff),
         ]
@@ -258,7 +259,7 @@ if args.test:
     print('Running command:', test_command)
     subprocess.run(test_command)
 
-if args.sound_extract:
+if args.extract:
     print('Running rule extraction algorithms...')
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
