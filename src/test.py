@@ -51,7 +51,7 @@ parser.add_argument('--print-entailed-facts',
                     default=None,
                     help='Print the facts that have been derived in the provided filename.')
 parser.add_argument('--weight-cutoff',
-                    help='Threshold size below which model weights are clamped to 0',
+                    help='Weight magnitude below which model weights are clamped to 0',
                     default=0,
                     type=float)
 parser.add_argument('--use-wandb',
@@ -59,6 +59,22 @@ parser.add_argument('--use-wandb',
                     choices=[0, 1],
                     default=0,
                     help='Log to wandb?')
+
+parser.add_argument('--eval-threshold-key',
+                    type=float,
+                    default=-1,
+                    help='Used as key for model.eval_thresholds')
+parser.add_argument('--set-optimal-threshold',
+                    type=int,
+                    choices=[0, 1],
+                    default=0,
+                    help='Set the optimal threshold in the model? Done by ranging over the options'
+                         'and maximising the accuracy')
+parser.add_argument('--use-optimal-threshold',
+                    type=int,
+                    choices=[0, 1],
+                    default=0,
+                    help='Use the optimal threshold given in the model? Will override threshold param.')
 args = parser.parse_args()
 
 
@@ -145,10 +161,18 @@ if __name__ == "__main__":
 
     test_data = Data(x=test_x, edge_index=test_edge_list, edge_type=test_edge_colour_list).to(device)
 
+    given_threshold = args.threshold
+
     print("Evaluating model {} on dataset {} using threshold={}".format(args.load_model_name,
-                                                                        args.test_graph, args.threshold))
+                                                                        args.test_graph, given_threshold))
     model: gnn_architectures.GNN = torch.load(args.load_model_name).to(device)
     model.eval()
+
+    if args.use_optimal_threshold:
+        assert args.eval_threshold_key in model.eval_thresholds, 'Optimal threshold must first be set on valid dataset'
+        # set the threshold using the one provided in the model, if it is given
+        given_threshold = model.eval_thresholds[args.eval_threshold_key]
+        print(f'Optimal threshold specified in model: threshold set to {given_threshold} for evaluation')
 
     # cutoff weights of model if specified
     if args.weight_cutoff != 0:
@@ -158,7 +182,7 @@ if __name__ == "__main__":
     # importantly, the ith row of gnn_output and test_x represent the same node
     gnn_output = model(test_data)
 
-    cd_output_dataset_scores_dict = can_encoder_decoder.decode_graph(test_nodes, gnn_output, args.threshold)
+    cd_output_dataset_scores_dict = can_encoder_decoder.decode_graph(test_nodes, gnn_output, given_threshold)
     # facts_scores_dict:  a dictionary mapping triples (s,p,o) to a value (in str) score
     if args.encoding_scheme == 'canonical':
         facts_scores_dict = cd_output_dataset_scores_dict
@@ -184,8 +208,8 @@ if __name__ == "__main__":
 
     threshold_list = [1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3] + arange(0.01, 1, 0.01).tolist()
     # If threshold was specified (i.e. not 0), then only use the given threshold
-    if args.threshold != 0:
-        threshold_list = [args.threshold]
+    if given_threshold != 0:
+        threshold_list = [given_threshold]
     threshold_list = [round(elem, 10) for elem in threshold_list]
 
     number_of_positives = 0
@@ -261,10 +285,11 @@ if __name__ == "__main__":
     print("Scored examples: {}".format(counter_scored))
 
     print('Writing test results to:', args.output)
+    best_threshold, best_accuracy_v = -1, -1
     with open(args.output, 'w') as f:
         f.write("Threshold" + '\t' + "Precision" + '\t' + "Recall" + '\t' + "Accuracy" + '\t' + "F1 Score" + '\n')
         threshold_iter = threshold_to_counter
-        if args.threshold != 0:
+        if given_threshold != 0:
             threshold_iter = threshold_list  # Only evaluate on the single threshold if it is given
         for threshold in threshold_iter:
             tp, fp, tn, fn = threshold_to_counter[threshold]
@@ -273,6 +298,7 @@ if __name__ == "__main__":
             accuracy_v = accuracy(tp, fp, tn, fn)
             f1score_v = f1score(tp, fp, tn, fn)
             f.write("{}\t{}\t{}\t{}\t{}\n".format(threshold, precision_v, recall_v, accuracy_v, f1score_v))
+
             if args.use_wandb:
                 wandb.log({
                     'threshold': threshold,
@@ -283,6 +309,10 @@ if __name__ == "__main__":
                 })
             recall_vector.append(recall_v)
             precision_vector.append(precision_v)
+
+            if accuracy_v > best_accuracy_v:
+                best_accuracy_v = accuracy_v
+                best_threshold = threshold
         # Add extremal points for AUC. This ensures a perfect classifier has AUC 1, a random classifier has AUC 0.5,
         # and an `always wrong' classifier has an AUC 0.
         # Without this, a perfect classifier would have a score of 0!!
@@ -299,6 +329,13 @@ if __name__ == "__main__":
             wandb.log({'auprc': auprc_v})
 
     f.close()
+
+    # Set the threshold in the model using the one that yielded the best accuracy
+    if args.set_optimal_threshold:
+        print(f'Found optimal threshold of {best_threshold}, saving in model')
+        model: gnn_architectures.GNN = torch.load(args.load_model_name).to(device)
+        model.eval_thresholds[args.eval_threshold_key] = best_threshold
+        torch.save(model, args.load_model_name)
 
     if args.use_wandb:
         wandb.finish()

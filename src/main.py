@@ -1,6 +1,11 @@
 import argparse
 import subprocess
 
+import torch
+
+from sound_rule_extraction import find_weight_cutoff_for_ratio_rule_channels
+import gnn_architectures
+
 link_prediction_datasets = [
     'WN18RRv1',
     'WN18RRv2',
@@ -76,6 +81,10 @@ parser.add_argument('--test',
                     choices=[0, 1],
                     default=0,
                     help='If 0, the script will not test the model, merely train it')
+parser.add_argument('--non-negative-weights',
+                    choices=['True', 'False'],
+                    default='False',
+                    help='Restrict matrix weights during training so that they are all non-negative')
 
 # Testing
 parser.add_argument('--evaluation-set',
@@ -86,11 +95,19 @@ parser.add_argument('--threshold',
                     type=float,
                     default=0,
                     help='Threshold of the GNN.'
-                         'Threshold = 0 means threshold list used. Threshold != 0 only uses given threshold')
+                         'Threshold = 0 means threshold list used. Threshold != 0 only uses given threshold.'
+                         'This is usually not set manually, but set automatically when evaluating on the validation set')
 parser.add_argument('--negative-sampling-method',
                     default='rb',
                     choices=['rb', 'rc', 'pc'],
                     help='Negative sampling method for evaluation')
+parser.add_argument('--rule-channels-min-ratio',
+                    type=float,
+                    default=-1,
+                    help='Weight cutoff will be chosen to give a number of channels corresponding to rules'
+                         'strictly greater than the ratio given, which should be in [0, 1).'
+                         'Such channels are either UP or 0 (i.e. monotonic increasing or do not depend on input).'
+                         'If -1, then no weight cutoff is used.')
 
 # Logging
 parser.add_argument('--use-wandb',
@@ -113,7 +130,6 @@ model_name = f'{args.dataset}_layers_{args.layers}_lr_{args.lr}_seed_{args.seed}
 model_folder = '../models'
 encoder_folder = '../encoders'
 aggregation = 'sum'
-non_negative_weights = 'False'
 
 train_graph, train_examples, predicates, train_file_full = None, None, None, None
 
@@ -148,7 +164,7 @@ train_command = [
     '--encoding-scheme', encoding_scheme,
     '--encoder-folder', encoder_folder,
     '--aggregation', aggregation,
-    '--non-negative-weights', non_negative_weights,
+    '--non-negative-weights', args.non_negative_weights,
     '--layers', str(args.layers),
     '--lr', str(args.lr),
     '--seed', str(args.seed),
@@ -170,7 +186,7 @@ else:
     ]
 
 if args.train:
-    print("Training...")
+    print('Training...')
     print('Running command:', train_command)
     subprocess.run(train_command)
 
@@ -178,8 +194,7 @@ if args.train:
 # TESTING
 #
 load_model_name = f'{model_folder}/{model_name}.pt'
-threshold = 0  # Fix at zero for now. TODO: change way threshold is used in test file.
-weight_cutoff = 0  # TODO: range over various weight cutoffs
+
 if args.dataset in node_classification_datasets:
     assert args.evaluation_set == 'test', f'Only the test set exists for {args.dataset}, not the valid set'
     test_graph = f'{path_to_dataset}/test.tsv'
@@ -193,7 +208,7 @@ else:  # log_infer_datasets:
     test_graph = train_file_full
     test_positive_examples = f'{path_to_dataset}/{args.evaluation_set}.txt'
     test_negative_examples = f'{path_to_dataset}/{args.evaluation_set}_neg_{args.negative_sampling_method}.txt'
-output = f'../metrics/{model_name}_cutoff_{weight_cutoff}.txt'
+output = f'../metrics/{model_name}_rule_channels_{args.rule_channels_min_ratio}.txt'
 canonical_encoder_file = f'../encoders/{model_name}_canonical.tsv'
 iclr22_encoder_file = f'../encoders/{model_name}_iclr22.tsv'
 
@@ -201,8 +216,6 @@ test_command = [
     'python',
     'test.py',
     '--load-model-name', load_model_name,
-    '--threshold', str(threshold),
-    '--weight-cutoff', str(weight_cutoff),
     '--test-graph', test_graph,
     '--test-positive-examples', test_positive_examples,
     '--test-negative-examples', test_negative_examples,
@@ -215,6 +228,20 @@ test_command = [
 ]
 
 if args.test:
-    print("Testing...")
+    print('Testing...')
+
+    if args.rule_channels_min_ratio != -1:
+        print(f'Searching for a weight cutoff to obtain >{args.rule_channels_min_ratio} rule channels')
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        model: gnn_architectures.GNN = torch.load(args.load_model_name).to(device)
+        weight_cutoff, ratio_up, ratio_zero = find_weight_cutoff_for_ratio_rule_channels(
+            model,
+            args.rule_channels_min_ratio,
+        )
+        test_command = test_command + [
+            '--weight-cutoff', str(weight_cutoff),
+            '--eval-threshold-key', str(args.rule_channels_min_ratio),
+        ]
+
     print('Running command:', test_command)
     subprocess.run(test_command)

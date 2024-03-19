@@ -263,10 +263,12 @@ def neg_inf_line(model, algorithm_iterations=1000):
 
 
 # min_threshold_increment determines how finely the model should adjust the threshold
-def find_threshold_for_half_learnable(model: gnn_architectures.GNN, min_cutoff_increment=0.0001):
+# min_ratio_learnable is a strict lower bound on the number of channels which are 0 or UP
+def find_weight_cutoff_for_ratio_rule_channels(model: gnn_architectures.GNN,
+                                               min_ratio_learnable=0.5,
+                                               min_cutoff_increment=0.0001):
     min_cutoff = 0
     max_cutoff = max_weight_size_in_model(model)
-    min_ratio_learnable = 0.5  # strict lower bound on the number of channels which are 0 or UP
 
     final_ratio_up = 0
     final_ratio_zero = 0
@@ -274,16 +276,11 @@ def find_threshold_for_half_learnable(model: gnn_architectures.GNN, min_cutoff_i
     while max_cutoff - min_cutoff > min_cutoff_increment:
         cutoff_model = copy.deepcopy(model)
         middle_cutoff = (max_cutoff + min_cutoff) / 2  # binary search
-        print('-----')
-        print(f'middle_cutoff: {middle_cutoff}')
         weight_cutoff_model(cutoff_model, middle_cutoff)
         alg_final_state = up_down(cutoff_model)
 
         up_count = alg_final_state.count(UpDownStates.UP)
         zero_count = alg_final_state.count(UpDownStates.ZERO)
-        print(f'up_count: {up_count}')
-        print(f'zero_count: {zero_count}')
-        print('-----')
         ratio_learnable = (up_count + zero_count) / len(alg_final_state)
 
         if ratio_learnable > min_ratio_learnable:
@@ -339,6 +336,6 @@ if __name__ == '__main__':
               'channels found which can be negative infinity before the final activation function')
 
     if args.extraction_algorithm == 'find-cutoff':
-        cutoff, ratio_up, ratio_zero = find_threshold_for_half_learnable(loaded_model)
+        cutoff, ratio_up, ratio_zero = find_weight_cutoff_for_ratio_rule_channels(loaded_model)
         print('\n\n----\n\n')
         print(f'cutoff: {cutoff}, ratio_up: {ratio_up}, ratio_zero: {ratio_zero}')

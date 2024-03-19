@@ -74,6 +74,13 @@ class GNN(torch.nn.Module):
         self.activation_fn = torch.relu
         self.output_fn = torch.nn.Sigmoid()
 
+        # key is the min ratio of rule channels
+        # value is the threshold: it is set when evaluating on the validation set, by maximising accuracy
+        # when value is non-zero, this means that a particular threshold has been chosen
+        # e.g. {-1: 0.1} means that for no weight clamping, 0.1 is the optimal threshold
+        # e.g. {0.5: 0.2} means that for weight clamping to obtain >0.5 learnable rules, 0.2 is optimal threshold
+        self.eval_thresholds = {}
+
     def forward(self, data):
         x, edge_index, edge_colour = data.x, data.edge_index, data.edge_type
 
