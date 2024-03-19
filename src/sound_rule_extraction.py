@@ -9,20 +9,6 @@ import torch
 import gnn_architectures
 from model_sparsity import weight_cutoff_model
 
-parser = argparse.ArgumentParser(description="Extract sound rules")
-parser.add_argument('--model-path', help='Path to model file')
-parser.add_argument('--weight-cutoff', help='Threshold size below which weights are clamped to 0', default=0, type=float)
-parser.add_argument('--extraction-algorithm', help='Algorithm to use for extraction',
-                    choices=['stats', 'nabn', 'up-down', 'neg-inf-fan', 'neg-inf-line'])
-args = parser.parse_args()
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model: gnn_architectures.GNN = torch.load(args.model_path).to(device)
-
-
-if args.weight_cutoff != 0:
-    weight_cutoff_model(model, args.weight_cutoff)
-
 
 def value_breakdown(matrix: torch.tensor, ratio=True):
     positive_mask = matrix > 0
@@ -39,7 +25,7 @@ def value_breakdown(matrix: torch.tensor, ratio=True):
     return n_pos, n_neg, n_zero
 
 
-if args.extraction_algorithm == 'stats':
+def model_stats(model):
     tot_positive, tot_negative, tot_zeroes = 0, 0, 0
     print('Layer || Matrix || Positive || Negative || Zero')
     for layer in range(1, model.num_layers + 1):
@@ -68,7 +54,8 @@ if args.extraction_algorithm == 'stats':
     tot_zeroes = tot_zeroes / total
     print("{:.10f}".format(tot_positive), "{:.10f}".format(tot_negative), "{:.10f}".format(tot_zeroes), sep=' || ')
 
-if args.extraction_algorithm == 'nabn':
+
+def nabn(model):
     s0 = [0] * model.layer_dimension(0)
     states = [s0]
     for layer in range(1, model.num_layers + 1):
@@ -111,7 +98,7 @@ class UpDownStates(Enum):
     UNKNOWN = 3
 
 
-if args.extraction_algorithm == 'up-down':
+def up_down(model):
     # 0 = up, 1 = down, 2 = 0, 3 = ?
     s0 = [UpDownStates.UP] * model.layer_dimension(0)
     states = [s0]
@@ -216,7 +203,7 @@ def random_binary_tensor(size: int, probability_of_one: float):
 
 # Algorithm only works for two-layer GNNs
 # Since v_0=0 cancels out B_0 matrices, and model is only two layers
-if args.extraction_algorithm == 'neg-inf-fan':
+def neg_inf_fan(model):
     assert model.num_layers == 2
     initial_value = torch.zeros(model.layer_dimension(0))  # Init to zeroes to pass nothing in first layer
 
@@ -238,7 +225,7 @@ if args.extraction_algorithm == 'neg-inf-fan':
 
 # Only works with ReLU
 # Line of nodes to the root node, fan of size d at the end away from the root node
-if args.extraction_algorithm == 'neg-inf-line':
+def neg_inf_line(model):
     # Channels by default cannot have negative infinity passed to them
     is_neg_inf = torch.zeros(model.layer_dimension(model.num_layers), dtype=torch.bool)
     algorithm_iterations = 10
@@ -304,3 +291,34 @@ if args.extraction_algorithm == 'neg-inf-line':
     print(is_neg_inf)
     print(torch.count_nonzero(is_neg_inf).item(), '/', model.layer_dimension(model.num_layers),
           'channels found which can be negative infinity before the final activation function')
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Extract sound rules")
+    parser.add_argument('--model-path', help='Path to model file')
+    parser.add_argument('--weight-cutoff', help='Threshold size below which weights are clamped to 0', default=0,
+                        type=float)
+    parser.add_argument('--extraction-algorithm', help='Algorithm to use for extraction',
+                        choices=['stats', 'nabn', 'up-down', 'neg-inf-fan', 'neg-inf-line'])
+    args = parser.parse_args()
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    loaded_model: gnn_architectures.GNN = torch.load(args.model_path).to(device)
+
+    if args.weight_cutoff != 0:
+        weight_cutoff_model(loaded_model, args.weight_cutoff)
+
+    if args.extraction_algorithm == 'stats':
+        model_stats(loaded_model)
+
+    if args.extraction_algorithm == 'nabn':
+        nabn(loaded_model)
+
+    if args.extraction_algorithm == 'up-down':
+        up_down(loaded_model)
+
+    if args.extraction_algorithm == 'neg-inf-fan':
+        neg_inf_fan(loaded_model)
+
+    if args.extraction_algorithm == 'neg-inf-line':
+        neg_inf_line(loaded_model)
