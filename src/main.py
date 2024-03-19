@@ -3,8 +3,10 @@ import subprocess
 
 import torch
 
-from sound_rule_extraction import find_weight_cutoff_for_ratio_rule_channels
+from sound_rule_extraction import find_weight_cutoff_for_ratio_rule_channels, model_stats, nabn, up_down, UpDownStates, \
+    neg_inf_line
 import gnn_architectures
+from model_sparsity import weight_cutoff_model
 
 link_prediction_datasets = [
     'WN18RRv1',
@@ -76,27 +78,21 @@ parser.add_argument('--train',
                     choices=[0, 1],
                     default=0,
                     help='If 0, the script will not train a new model, but fetch an existing trained model')
-parser.add_argument('--test',
-                    type=int,
-                    choices=[0, 1],
-                    default=0,
-                    help='If 0, the script will not test the model, merely train it')
 parser.add_argument('--non-negative-weights',
                     choices=['True', 'False'],
                     default='False',
                     help='Restrict matrix weights during training so that they are all non-negative')
 
 # Testing
+parser.add_argument('--test',
+                    type=int,
+                    choices=[0, 1],
+                    default=0,
+                    help='If 0, the script will not test the model, merely train it')
 parser.add_argument('--evaluation-set',
                     default='valid',
                     choices=['valid', 'test'],
                     help='Whether you should evaluate on the validation or test set')
-parser.add_argument('--threshold',
-                    type=float,
-                    default=0,
-                    help='Threshold of the GNN.'
-                         'Threshold = 0 means threshold list used. Threshold != 0 only uses given threshold.'
-                         'This is usually not set manually, but set automatically when evaluating on the validation set')
 parser.add_argument('--negative-sampling-method',
                     default='rb',
                     choices=['rb', 'rc', 'pc'],
@@ -108,6 +104,13 @@ parser.add_argument('--rule-channels-min-ratio',
                          'strictly greater than the ratio given, which should be in [0, 1).'
                          'Such channels are either UP or 0 (i.e. monotonic increasing or do not depend on input).'
                          'If -1, then no weight cutoff is used.')
+
+# Rule extraction
+parser.add_argument('--sound-extract',
+                    type=int,
+                    choices=[0, 1],
+                    default=0,
+                    help='Run and log the outputs of the rule extraction algorithms?')
 
 # Logging
 parser.add_argument('--use-wandb',
@@ -151,7 +154,8 @@ elif args.dataset in log_infer_datasets:
     encoding_scheme = 'iclr22'
     path_to_dataset = f'../data/LogInfer/LogInfer-benchmark/{args.dataset}-{args.log_infer_pattern}'
     train_file_full = f'{path_to_dataset}/train.txt'
-    # 'rb' hard coded into model name for now, to access old trained models. TODO: remove from model name entirely
+    # 'rb' hard coded into model name for now, to access old trained models.
+    # TODO: remove from model name entirely, but it must appear in test model names (unless I always use pc)
     model_name = f'{args.dataset}-{args.log_infer_pattern}-rb_layers_{args.layers}_lr_{args.lr}_seed_{args.seed}'
 else:
     assert False, f'Dataset "{args.dataset}" not recognized'
@@ -224,24 +228,67 @@ test_command = [
     '--canonical-encoder-file', canonical_encoder_file,
     '--iclr22-encoder-file', iclr22_encoder_file,
     '--use-wandb', str(args.use_wandb),
-    '--threshold', str(args.threshold),
+    '--eval-threshold-key', str(args.rule_channels_min_ratio),
 ]
+
+if args.evaluation_set == 'valid':
+    test_command = test_command + [
+        '--set-optimal-threshold', '1',
+    ]
+elif args.evaluation_set == 'test':
+    test_command = test_command + [
+        '--use-optimal-threshold', '1',
+    ]
 
 if args.test:
     print('Testing...')
 
     if args.rule_channels_min_ratio != -1:
-        print(f'Searching for a weight cutoff to obtain >{args.rule_channels_min_ratio} rule channels')
+        print(f'Searching for a weight cutoff to obtain a ratio of >{args.rule_channels_min_ratio} rule channels')
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        model: gnn_architectures.GNN = torch.load(args.load_model_name).to(device)
+        model: gnn_architectures.GNN = torch.load(load_model_name).to(device)
         weight_cutoff, ratio_up, ratio_zero = find_weight_cutoff_for_ratio_rule_channels(
             model,
             args.rule_channels_min_ratio,
         )
         test_command = test_command + [
             '--weight-cutoff', str(weight_cutoff),
-            '--eval-threshold-key', str(args.rule_channels_min_ratio),
         ]
 
     print('Running command:', test_command)
     subprocess.run(test_command)
+
+if args.sound_extract:
+    print('Running rule extraction algorithms...')
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model: gnn_architectures.GNN = torch.load(load_model_name).to(device)
+
+    if args.rule_channels_min_ratio != -1:
+        print(f'Searching for a weight cutoff to obtain a ratio of >{args.rule_channels_min_ratio} rule channels')
+        weight_cutoff, ratio_up, ratio_zero = find_weight_cutoff_for_ratio_rule_channels(
+            model,
+            args.rule_channels_min_ratio,
+        )
+        print(f'Cutoff {weight_cutoff} found')
+        weight_cutoff_model(model, weight_cutoff)
+
+    print('-----\nModel stats:')
+    model_stats(model)
+    print('-----\nNABN:')
+    final_state = nabn(model)
+    print(final_state)
+    print('Different rule heads that can be checked:', final_state.count(0))
+    print('-----\nUp-Down:')
+    final_state = up_down(model)
+    print(final_state)
+    print('Monotonically increasing:', final_state.count(UpDownStates.UP))
+    print('Monotonically decreasing:', final_state.count(UpDownStates.DOWN))
+    print('Zero:', final_state.count(UpDownStates.ZERO))
+    print('Unknown:', final_state.count(UpDownStates.UNKNOWN))
+    print('-----\nNeg-Inf-Line:')
+    neg_inf_channels = neg_inf_line(model)
+    print(neg_inf_channels)
+    print(torch.count_nonzero(neg_inf_channels).item(), '/', model.layer_dimension(model.num_layers),
+          'channels found which can be negative infinity before the final activation function')
+

@@ -25,7 +25,8 @@ parser.add_argument('--load-model-name',
 parser.add_argument('--threshold',
                     type=float,
                     default=0,
-                    help='threshold of the GNN. The default value is 0 (all facts with positive scores are derived)')
+                    help='Threshold of the GNN. The default value is 0 (all facts with positive scores are derived).'
+                         'Overwritten when use-optimal-threshold is 1.')
 parser.add_argument('--predicates',
                     help='File with the fixed, ordered list of predicates we consider.')
 parser.add_argument('--test-graph',
