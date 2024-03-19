@@ -87,8 +87,7 @@ def nabn(model):
                         break
 
         states.append(sl)
-    print(states[-1])
-    print('Different rule heads that can be checked:', states[-1].count(0))
+    return states[-1]
 
 
 class UpDownStates(Enum):
@@ -152,11 +151,7 @@ def up_down(model):
                 sl[i] = UpDownStates.ZERO
 
         states.append(sl)
-    print(states[-1])
-    print('Monotonically increasing:', states[-1].count(UpDownStates.UP))
-    print('Monotonically decreasing:', states[-1].count(UpDownStates.DOWN))
-    print('Zero:', states[-1].count(UpDownStates.ZERO))
-    print('Unknown:', states[-1].count(UpDownStates.UNKNOWN))
+    return states[-1]
 
 
 # Node has no incoming edges
@@ -194,9 +189,7 @@ def neg_inf_fan(model):
         passed_value_neg_mask = passed_value < 0
         is_neg_inf[passed_value_neg_mask] = 1
 
-    print(is_neg_inf)
-    print(torch.count_nonzero(is_neg_inf).item(), '/', model.layer_dimension(model.num_layers), 'channels found which can be negative infinity before the final activation function')
-
+    return is_neg_inf
 
 # Only works with ReLU
 # Line of nodes to the root node, fan of size d at the end away from the root node
@@ -261,11 +254,10 @@ def neg_inf_line(model):
         neg_inf_channels_for_iter = torch.zeros_like(is_neg_inf)
         neg_inf_channels_for_iter[y_value_neg_mask] = 1
 
-        print(torch.count_nonzero(neg_inf_channels_for_iter).item(), '/', model.layer_dimension(model.num_layers))
+        # Uncomment the below to see number of found channels for each iteration of the algorithm
+        # print(torch.count_nonzero(neg_inf_channels_for_iter).item(), '/', model.layer_dimension(model.num_layers))
 
-    print(is_neg_inf)
-    print(torch.count_nonzero(is_neg_inf).item(), '/', model.layer_dimension(model.num_layers),
-          'channels found which can be negative infinity before the final activation function')
+    return is_neg_inf
 
 
 if __name__ == '__main__':
@@ -287,13 +279,26 @@ if __name__ == '__main__':
         model_stats(loaded_model)
 
     if args.extraction_algorithm == 'nabn':
-        nabn(loaded_model)
+        final_state = nabn(loaded_model)
+        print(final_state)
+        print('Different rule heads that can be checked:', final_state.count(0))
 
     if args.extraction_algorithm == 'up-down':
-        up_down(loaded_model)
+        final_state = up_down(loaded_model)
+        print(final_state)
+        print('Monotonically increasing:', final_state.count(UpDownStates.UP))
+        print('Monotonically decreasing:', final_state.count(UpDownStates.DOWN))
+        print('Zero:', final_state.count(UpDownStates.ZERO))
+        print('Unknown:', final_state.count(UpDownStates.UNKNOWN))
 
     if args.extraction_algorithm == 'neg-inf-fan':
-        neg_inf_fan(loaded_model)
+        is_neg_inf = neg_inf_fan(loaded_model)
+        print(is_neg_inf)
+        print(torch.count_nonzero(is_neg_inf).item(), '/', loaded_model.layer_dimension(loaded_model.num_layers),
+              'channels found which can be negative infinity before the final activation function')
 
     if args.extraction_algorithm == 'neg-inf-line':
-        neg_inf_line(loaded_model)
+        is_neg_inf = neg_inf_line(loaded_model)
+        print(is_neg_inf)
+        print(torch.count_nonzero(is_neg_inf).item(), '/', loaded_model.layer_dimension(loaded_model.num_layers),
+              'channels found which can be negative infinity before the final activation function')
