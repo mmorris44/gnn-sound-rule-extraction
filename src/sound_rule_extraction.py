@@ -1,4 +1,5 @@
 import argparse
+import copy
 import math
 import random
 from enum import Enum
@@ -7,7 +8,7 @@ from typing import List
 import torch
 
 import gnn_architectures
-from model_sparsity import weight_cutoff_model
+from model_sparsity import weight_cutoff_model, max_weight_size_in_model
 
 
 def value_breakdown(matrix: torch.tensor, ratio=True):
@@ -191,12 +192,13 @@ def neg_inf_fan(model):
 
     return is_neg_inf
 
+
 # Only works with ReLU
 # Line of nodes to the root node, fan of size d at the end away from the root node
-def neg_inf_line(model):
+def neg_inf_line(model, algorithm_iterations=1000):
     # Channels by default cannot have negative infinity passed to them
     is_neg_inf = torch.zeros(model.layer_dimension(model.num_layers), dtype=torch.bool)
-    algorithm_iterations = 10
+
     for _ in range(algorithm_iterations):
         # All nodes given the same initial value
         initial_value = random_binary_tensor(model.layer_dimension(0), 0.5)
@@ -260,13 +262,46 @@ def neg_inf_line(model):
     return is_neg_inf
 
 
+# min_threshold_increment determines how finely the model should adjust the threshold
+def find_threshold_for_half_learnable(model: gnn_architectures.GNN, min_cutoff_increment=0.0001):
+    min_cutoff = 0
+    max_cutoff = max_weight_size_in_model(model)
+    min_ratio_learnable = 0.5  # strict lower bound on the number of channels which are 0 or UP
+
+    final_ratio_up = 0
+    final_ratio_zero = 0
+
+    while max_cutoff - min_cutoff > min_cutoff_increment:
+        cutoff_model = copy.deepcopy(model)
+        middle_cutoff = (max_cutoff + min_cutoff) / 2  # binary search
+        print('-----')
+        print(f'middle_cutoff: {middle_cutoff}')
+        weight_cutoff_model(cutoff_model, middle_cutoff)
+        alg_final_state = up_down(cutoff_model)
+
+        up_count = alg_final_state.count(UpDownStates.UP)
+        zero_count = alg_final_state.count(UpDownStates.ZERO)
+        print(f'up_count: {up_count}')
+        print(f'zero_count: {zero_count}')
+        print('-----')
+        ratio_learnable = (up_count + zero_count) / len(alg_final_state)
+
+        if ratio_learnable > min_ratio_learnable:
+            max_cutoff = middle_cutoff
+            final_ratio_up = up_count / len(alg_final_state)
+            final_ratio_zero = zero_count / len(alg_final_state)
+        else:
+            min_cutoff = middle_cutoff
+    return max_cutoff.item(), final_ratio_up, final_ratio_zero
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Extract sound rules")
     parser.add_argument('--model-path', help='Path to model file')
     parser.add_argument('--weight-cutoff', help='Threshold size below which weights are clamped to 0', default=0,
                         type=float)
     parser.add_argument('--extraction-algorithm', help='Algorithm to use for extraction',
-                        choices=['stats', 'nabn', 'up-down', 'neg-inf-fan', 'neg-inf-line'])
+                        choices=['stats', 'nabn', 'up-down', 'neg-inf-fan', 'neg-inf-line', 'find-cutoff'])
     args = parser.parse_args()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -292,13 +327,18 @@ if __name__ == '__main__':
         print('Unknown:', final_state.count(UpDownStates.UNKNOWN))
 
     if args.extraction_algorithm == 'neg-inf-fan':
-        is_neg_inf = neg_inf_fan(loaded_model)
-        print(is_neg_inf)
-        print(torch.count_nonzero(is_neg_inf).item(), '/', loaded_model.layer_dimension(loaded_model.num_layers),
+        neg_inf_channels = neg_inf_fan(loaded_model)
+        print(neg_inf_channels)
+        print(torch.count_nonzero(neg_inf_channels).item(), '/', loaded_model.layer_dimension(loaded_model.num_layers),
               'channels found which can be negative infinity before the final activation function')
 
     if args.extraction_algorithm == 'neg-inf-line':
-        is_neg_inf = neg_inf_line(loaded_model)
-        print(is_neg_inf)
-        print(torch.count_nonzero(is_neg_inf).item(), '/', loaded_model.layer_dimension(loaded_model.num_layers),
+        neg_inf_channels = neg_inf_line(loaded_model)
+        print(neg_inf_channels)
+        print(torch.count_nonzero(neg_inf_channels).item(), '/', loaded_model.layer_dimension(loaded_model.num_layers),
               'channels found which can be negative infinity before the final activation function')
+
+    if args.extraction_algorithm == 'find-cutoff':
+        cutoff, ratio_up, ratio_zero = find_threshold_for_half_learnable(loaded_model)
+        print('\n\n----\n\n')
+        print(f'cutoff: {cutoff}, ratio_up: {ratio_up}, ratio_zero: {ratio_zero}')

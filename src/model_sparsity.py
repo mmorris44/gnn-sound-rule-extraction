@@ -18,3 +18,23 @@ def weight_cutoff_model(model: gnn_architectures.GNN, weight_cutoff: float):
         for colour in range(model.num_colours):
             matrix_b = model.matrix_B(layer, colour)
             threshold_matrix_values(matrix_b, weight_cutoff)
+
+
+def max_abs_value_in_matrix(matrix: torch.tensor):
+    return torch.max(torch.abs(matrix))
+
+
+# Get the weight with max absolute value
+def max_weight_size_in_model(model: gnn_architectures.GNN):
+    max_weight = 0
+    for layer in range(1, model.num_layers + 1):
+        matrix_a = model.matrix_A(layer)
+        matrix_max = max_abs_value_in_matrix(matrix_a)
+        if matrix_max > max_weight:
+            max_weight = matrix_max
+        for colour in range(model.num_colours):
+            matrix_b = model.matrix_B(layer, colour)
+            matrix_max = max_abs_value_in_matrix(matrix_b)
+            if matrix_max > max_weight:
+                max_weight = matrix_max
+    return max_weight
