@@ -159,31 +159,6 @@ def up_down(model):
     print('Unknown:', states[-1].count(UpDownStates.UNKNOWN))
 
 
-class MinMaxStates(Enum):
-    VALUE = 0
-    INF = 1
-    NEG_INF = 2
-    UNKNOWN = 3
-
-
-# This is not working, but there may be something useful here for later
-def apply_gnn_layer_to_arbitrary_node(initial_value: torch.tensor, edges_per_colour: List[int], gnn: gnn_architectures.GNN, layer_num: int):
-    a_matrix = gnn.matrix_A(layer_num)
-    b_matrices = [gnn.matrix_B(layer_num, colour_id) for colour_id in range(gnn.num_colours)]
-    base_tensor = torch.matmul(a_matrix, initial_value)
-    channel_states = [(MinMaxStates.VALUE, MinMaxStates.VALUE) for _ in range(base_tensor.size()[0])]
-    agg_tensor_summed = torch.zeros_like(base_tensor)
-    for colour, b_matrix in enumerate(b_matrices):
-        agg_tensor = torch.matmul(b_matrix, initial_value)
-        agg_tensor_summed += agg_tensor * edges_per_colour[colour]
-    for i, entry in enumerate(agg_tensor_summed):
-        if entry < 0:
-            channel_states[i] = (MinMaxStates.NEG_INF, MinMaxStates.VALUE)
-        elif entry > 0:
-            channel_states[i] = (MinMaxStates.VALUE, MinMaxStates.INF)
-    return model.activation(layer_num)(base_tensor + agg_tensor_summed + gnn.bias(layer_num)), channel_states
-
-
 # Node has no incoming edges
 # Final layer of GNN is not applied
 def apply_gnn_to_arbitrary_node(initial_value: torch.tensor, model: gnn_architectures.GNN):
