@@ -54,6 +54,7 @@ def model_stats(model):
     tot_negative = tot_negative / total
     tot_zeroes = tot_zeroes / total
     print("{:.10f}".format(tot_positive), "{:.10f}".format(tot_negative), "{:.10f}".format(tot_zeroes), sep=' || ')
+    return tot_positive, tot_negative, tot_zeroes
 
 
 def nabn(model):

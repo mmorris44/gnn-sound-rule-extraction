@@ -2,6 +2,7 @@ import argparse
 import subprocess
 
 import torch
+import wandb
 
 from sound_rule_extraction import find_weight_cutoff_for_ratio_rule_channels, model_stats, nabn, up_down, UpDownStates, \
     neg_inf_line
@@ -124,6 +125,10 @@ parser.add_argument('--log-interval',
                     help='How many epochs between model logs')
 
 args = parser.parse_args()
+
+# init logging
+if args.use_wandb:
+    wandb.init(project='sound-rule-extraction')
 
 #
 # TRAINING
@@ -272,24 +277,50 @@ if args.extract:
             args.rule_channels_min_ratio,
         )
         print(f'Cutoff {weight_cutoff} found')
+        if args.use_wandb:
+            wandb.log({
+                'weight_cutoff': weight_cutoff,
+            })
         weight_cutoff_model(model, weight_cutoff)
 
     print('-----\nModel stats:')
-    model_stats(model)
+    positive_weights, negative_weights, zero_weights = model_stats(model)
+
     print('-----\nNABN:')
     final_state = nabn(model)
     print(final_state)
-    print('Different rule heads that can be checked:', final_state.count(0))
+    nabn_ratio = final_state.count(0) / len(final_state)
+    print('Ratio of rule heads that can be checked:', nabn_ratio)
     print('-----\nUp-Down:')
     final_state = up_down(model)
     print(final_state)
-    print('Monotonically increasing:', final_state.count(UpDownStates.UP))
-    print('Monotonically decreasing:', final_state.count(UpDownStates.DOWN))
-    print('Zero:', final_state.count(UpDownStates.ZERO))
-    print('Unknown:', final_state.count(UpDownStates.UNKNOWN))
+    up_down_ratio_up = final_state.count(UpDownStates.UP) / len(final_state)
+    up_down_ratio_down = final_state.count(UpDownStates.DOWN) / len(final_state)
+    up_down_ratio_zero = final_state.count(UpDownStates.ZERO) / len(final_state)
+    up_down_ratio_unknown = final_state.count(UpDownStates.UNKNOWN) / len(final_state)
+    print('Monotonically increasing:', up_down_ratio_up)
+    print('Monotonically decreasing:', up_down_ratio_down)
+    print('Zero:', up_down_ratio_zero)
+    print('Unknown:', up_down_ratio_unknown)
     print('-----\nNeg-Inf-Line:')
     neg_inf_channels = neg_inf_line(model)
     print(neg_inf_channels)
+    neg_inf_ratio = torch.count_nonzero(neg_inf_channels).item() / model.layer_dimension(model.num_layers)
     print(torch.count_nonzero(neg_inf_channels).item(), '/', model.layer_dimension(model.num_layers),
           'channels found which can be negative infinity before the final activation function')
 
+    if args.use_wandb:
+        wandb.log({
+            'positive_weights': positive_weights,
+            'negative_weights': negative_weights,
+            'zero_weights': zero_weights,
+            'nabn_ratio': nabn_ratio,
+            'up_down_ratio_up': up_down_ratio_up,
+            'up_down_ratio_down': up_down_ratio_down,
+            'up_down_ratio_zero': up_down_ratio_zero,
+            'up_down_ratio_unknown': up_down_ratio_unknown,
+            'neg_inf_ratio': neg_inf_ratio,
+        })
+
+if args.use_wandb:
+    wandb.finish()
