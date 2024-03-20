@@ -311,7 +311,7 @@ if __name__ == "__main__":
             recall_vector.append(recall_v)
             precision_vector.append(precision_v)
 
-            if accuracy_v > best_accuracy_v:
+            if accuracy_v > best_accuracy_v and threshold != 0.0:  # Prevent 0 from being flagged as best threshold
                 best_accuracy_v = accuracy_v
                 best_threshold = threshold
         # Add extremal points for AUC. This ensures a perfect classifier has AUC 1, a random classifier has AUC 0.5,
