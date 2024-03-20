@@ -37,10 +37,10 @@ log_infer_datasets = [
 ]
 
 log_infer_patterns = [
-    # 'comp',  # not tree-like, cannot be checked
+    # 'comp',  # not tree-like, cannot be checked. Triangle and diamond are also not tree-like
     'hier',
     'inter',
-    'inver'
+    'inver',
     'sym',
     'fork',
     'cup',
