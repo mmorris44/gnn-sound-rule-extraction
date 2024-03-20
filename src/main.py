@@ -95,7 +95,7 @@ parser.add_argument('--evaluation-set',
                     choices=['valid', 'test'],
                     help='Whether you should evaluate on the validation or test set')
 parser.add_argument('--negative-sampling-method',
-                    default='rb',
+                    default='pc',
                     choices=['rb', 'rc', 'pc'],
                     help='Negative sampling method for evaluation')
 parser.add_argument('--rule-channels-min-ratio',
@@ -159,9 +159,10 @@ elif args.dataset in log_infer_datasets:
     encoding_scheme = 'iclr22'
     path_to_dataset = f'../data/LogInfer/LogInfer-benchmark/{args.dataset}-{args.log_infer_pattern}'
     train_file_full = f'{path_to_dataset}/train.txt'
-    # 'rb' hard coded into model name for now, to access old trained models.
-    # TODO: remove from model name entirely, but it must appear in test model names (unless I always use pc)
-    model_name = f'{args.dataset}-{args.log_infer_pattern}-rb_layers_{args.layers}_lr_{args.lr}_seed_{args.seed}'
+    # note: 'rb' must be hard coded into model name if you want to access models trained before 20 March 2024
+    # TODO: note that negative dataset not specified in model, since it does not affect training
+    # TODO: however, it does affect hyperparameter tuning, so include in name if want to use different negative sets
+    model_name = f'{args.dataset}-{args.log_infer_pattern}_layers_{args.layers}_lr_{args.lr}_seed_{args.seed}'
 else:
     assert False, f'Dataset "{args.dataset}" not recognized'
 
