@@ -208,10 +208,9 @@ if args.train:
 load_model_name = f'{model_folder}/{model_name}.pt'
 
 if args.dataset in node_classification_datasets:
-    assert args.evaluation_set == 'test', f'Only the test set exists for {args.dataset}, not the valid set'
-    test_graph = f'{path_to_dataset}/test.tsv'
-    test_positive_examples = f'{path_to_dataset}/test_pos.tsv'
-    test_negative_examples = f'{path_to_dataset}/test_neg.tsv'
+    test_graph = f'{path_to_dataset}/test.tsv'  # Different graph given as input for testing
+    test_positive_examples = f'{path_to_dataset}/{args.evaluation_set}_pos.tsv'
+    test_negative_examples = f'{path_to_dataset}/{args.evaluation_set}_neg.tsv'
 elif args.dataset in link_prediction_datasets:
     test_graph = f'{path_to_dataset}/{args.evaluation_set}_graph.tsv'
     test_positive_examples = f'{path_to_dataset}/{args.evaluation_set}_pos.tsv'
