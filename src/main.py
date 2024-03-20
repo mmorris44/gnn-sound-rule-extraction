@@ -42,6 +42,8 @@ log_infer_patterns = [
     'inter',
     'inver'
     'sym',
+    'fork',
+    'cup',
 ]
 
 parser = argparse.ArgumentParser(description="Main file for running experiments")
