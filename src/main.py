@@ -208,11 +208,11 @@ if args.train:
 load_model_name = f'{model_folder}/{model_name}.pt'
 
 if args.dataset in node_classification_datasets:
-    test_graph = f'{path_to_dataset}/test.tsv'  # Different graph given as input for testing
+    test_graph = f'{path_to_dataset}/graph.nt'
     test_positive_examples = f'{path_to_dataset}/{args.evaluation_set}_pos.tsv'
     test_negative_examples = f'{path_to_dataset}/{args.evaluation_set}_neg.tsv'
 elif args.dataset in link_prediction_datasets:
-    test_graph = f'{path_to_dataset}/{args.evaluation_set}_graph.tsv'
+    test_graph = f'{path_to_dataset}/{args.evaluation_set}_graph.tsv'  # Different graph given as input for testing
     test_positive_examples = f'{path_to_dataset}/{args.evaluation_set}_pos.tsv'
     test_negative_examples = f'{path_to_dataset}/{args.evaluation_set}_neg.tsv'
 else:  # log_infer_datasets:
