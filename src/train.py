@@ -59,7 +59,9 @@ parser.add_argument('--train-with-dummies',
                     default=False,
                     action='store_true')
 parser.add_argument('--non-negative-weights',
-                    choices=['True', 'False'],
+                    type=int,
+                    choices=[0, 1],
+                    default=0,
                     help='Restrict matrix weights so that they are all non-negative')
 parser.add_argument('--early-stop',
                     default=50,  # -1 means no early stopping
@@ -260,7 +262,7 @@ if __name__ == "__main__":
             optimizer.step()
             # Any weight components < 0 are immediately "clamped" to 0, but not the bias
             for name, param in model.named_parameters():
-                if 'bias' not in name and args.non_negative_weights == 'True':
+                if 'bias' not in name and args.non_negative_weights:
                     param.data.clamp_(0)
             total_loss += batch.num_graphs * loss.sum().item()
         return total_loss

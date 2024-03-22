@@ -82,8 +82,9 @@ parser.add_argument('--train',
                     default=0,
                     help='If 0, the script will not train a new model, but fetch an existing trained model')
 parser.add_argument('--non-negative-weights',
-                    choices=['True', 'False'],
-                    default='False',
+                    type=int,
+                    choices=[0, 1],
+                    default=0,
                     help='Restrict matrix weights during training so that they are all non-negative')
 
 # Testing
@@ -168,7 +169,7 @@ elif args.dataset in log_infer_datasets:
 else:
     assert False, f'Dataset "{args.dataset}" not recognized'
 
-if args.non_negative_weights == 'True':
+if args.non_negative_weights:
     model_name = model_name + '_non_negative_weights'
 
 train_command = [
@@ -179,7 +180,7 @@ train_command = [
     '--encoding-scheme', encoding_scheme,
     '--encoder-folder', encoder_folder,
     '--aggregation', aggregation,
-    '--non-negative-weights', args.non_negative_weights,
+    '--non-negative-weights', str(args.non_negative_weights),
     '--layers', str(args.layers),
     '--lr', str(args.lr),
     '--seed', str(args.seed),
