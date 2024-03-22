@@ -168,6 +168,9 @@ elif args.dataset in log_infer_datasets:
 else:
     assert False, f'Dataset "{args.dataset}" not recognized'
 
+if args.non_negative_weights == 'True':
+    model_name = model_name + '_non_negative_weights'
+
 train_command = [
     'python',
     'train.py',
