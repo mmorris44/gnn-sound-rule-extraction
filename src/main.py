@@ -42,8 +42,9 @@ log_infer_patterns = [
     'inter',  # inter not supported for LogInfer-WN
     'inver',
     'sym',
-    'fork',
+    'fork',  # Only for WN so far (FB generation taking too much memory)
     'cup',
+    'nmhier',  # Only for WN so far, trial of non-monotonic dataset
 ]
 
 parser = argparse.ArgumentParser(description="Main file for running experiments")
