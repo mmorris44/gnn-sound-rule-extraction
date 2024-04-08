@@ -400,7 +400,7 @@ if __name__ == "__main__":
             gnn_output_gr = model(gr_dataset)
             assert gnn_output_gr[0][cd_fact_pred_pos] >= args.threshold,\
                 "ERROR: the extracted rule seems not to be captured by the model. This means there is a bug."
-        else:
+        else:  # TODO: use this to code rule extraction for multiple substitutions
             (gr_features, node_to_gr_row_dict, gr_edge_list, gr_colour_list) = can_encoder_decoder.encode_dataset(rule_body)
             gr_dataset = Data(x=gr_features, edge_index=gr_edge_list, edge_type=gr_colour_list).to(device)
             gnn_output_gr = model(gr_dataset)
