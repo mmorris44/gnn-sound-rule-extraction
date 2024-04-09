@@ -100,7 +100,7 @@ parser.add_argument('--evaluation-set',
                     help='Whether you should evaluate on the validation or test set')
 parser.add_argument('--negative-sampling-method',
                     default='pc',
-                    choices=['rb', 'rc', 'pc'],
+                    choices=['rb', 'rc', 'pc', 'nm'],
                     help='Negative sampling method for evaluation')
 parser.add_argument('--rule-channels-min-ratio',
                     type=float,
