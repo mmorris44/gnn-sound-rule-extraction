@@ -45,6 +45,7 @@ log_infer_patterns = [
     'fork',  # Only for WN so far (FB generation taking too much memory)
     'cup',
     'nmhier',  # Only for WN so far, trial of non-monotonic dataset
+    'hier_nmhier'  # Only for WN so far, mix of monotonic and non-monotonic
 ]
 
 parser = argparse.ArgumentParser(description="Main file for running experiments")
