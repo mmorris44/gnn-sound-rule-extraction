@@ -48,6 +48,8 @@ log_infer_patterns = [
     'hier_nmhier'  # Only for WN so far, mix of monotonic and non-monotonic
 ]
 
+negative_sampling_methods = ['rb', 'rc', 'pc', 'nm', 'pc_nm']
+
 parser = argparse.ArgumentParser(description="Main file for running experiments")
 
 # Training
@@ -101,7 +103,7 @@ parser.add_argument('--evaluation-set',
                     help='Whether you should evaluate on the validation or test set')
 parser.add_argument('--negative-sampling-method',
                     default='pc',
-                    choices=['rb', 'rc', 'pc', 'nm'],
+                    choices=negative_sampling_methods,
                     help='Negative sampling method for evaluation')
 parser.add_argument('--rule-channels-min-ratio',
                     type=float,
