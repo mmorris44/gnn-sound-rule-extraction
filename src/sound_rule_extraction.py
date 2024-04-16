@@ -26,6 +26,15 @@ def value_breakdown(matrix: torch.tensor, ratio=True):
     return n_pos, n_neg, n_zero
 
 
+def print_model(model):
+    print('Model A matrices:')
+    for layer in range(1, model.num_layers + 1):
+        print(f'Layer {layer}')
+        matrix_a = model.matrix_A(layer)
+        for row in matrix_a:
+            print([f'{el:.3f}' for el in row.tolist()])
+
+
 def model_stats(model):
     tot_positive, tot_negative, tot_zeroes = 0, 0, 0
     print('Layer || Matrix || Positive || Negative || Zero')

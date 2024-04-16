@@ -179,6 +179,9 @@ class ICLREncoderDecoder:
                 self.unary_canonical_to_input_predicate_dict[canonical_pred] = data_pred
                 self.data_predicate_to_arity[data_pred] = int(arity)
         elif unary_predicates is not None and binary_predicates is not None:
+            print('Predicates:')
+            print('Unary predicates:', unary_predicates)
+            print('Binary predicates:', binary_predicates)
             self.unary_canonical_counter = 0
             for pred in unary_predicates + binary_predicates:
                 if pred not in self.input_predicate_to_unary_canonical_dict:

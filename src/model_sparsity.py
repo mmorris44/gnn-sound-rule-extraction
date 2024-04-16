@@ -3,10 +3,14 @@ import torch
 import gnn_architectures
 
 
-def threshold_matrix_values(matrix: torch.tensor, threshold: float):
+# if negative_only==True, will only threshold negative values
+def threshold_matrix_values(matrix: torch.tensor, threshold: float, negative_only=True):
     below_threshold_mask = matrix <= -threshold
     above_threshold_mask = matrix >= threshold
-    outside_threshold_mask = torch.logical_or(below_threshold_mask, above_threshold_mask)
+    if negative_only:
+        outside_threshold_mask = above_threshold_mask
+    else:
+        outside_threshold_mask = torch.logical_or(below_threshold_mask, above_threshold_mask)
     inside_threshold_mask = torch.logical_not(outside_threshold_mask)
     matrix[inside_threshold_mask] = 0
 
