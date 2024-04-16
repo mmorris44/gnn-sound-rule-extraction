@@ -1,0 +1,5 @@
+_hypernym(x,y) implies _derivationally_related_form(x,y)
+_member_meronym(x,y) implies _member_of_domain_usage(x,y)
+_has_part(x,y) implies _member_of_domain_region(x,y)
+_synset_domain_topic_of(x,y) implies _derivationally_related_form(x,y)
+_instance_hypernym(x,y) implies _member_meronym(x,y)

@@ -1,5 +1,4 @@
-_instance_hypernym
-_hypernym
-_member_of_domain_region
-_also_see
-_member_of_domain_usage
+04953186
+04953186
+04953186
+04953186
