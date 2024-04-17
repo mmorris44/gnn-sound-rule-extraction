@@ -8,7 +8,7 @@ def threshold_matrix_values(matrix: torch.tensor, threshold: float, negative_onl
     below_threshold_mask = matrix <= -threshold
     above_threshold_mask = matrix >= threshold
     if negative_only:
-        outside_threshold_mask = above_threshold_mask
+        outside_threshold_mask = torch.logical_or(below_threshold_mask, matrix >= 0)
     else:
         outside_threshold_mask = torch.logical_or(below_threshold_mask, above_threshold_mask)
     inside_threshold_mask = torch.logical_not(outside_threshold_mask)

@@ -16,6 +16,7 @@ from encoding_schemes import CanonicalEncoderDecoder, ICLREncoderDecoder
 import nodes
 import sys
 import data_parser
+from sound_rule_extraction import print_model, model_stats
 
 from utils import load_predicates
 from gnn_architectures import GNN
@@ -120,8 +121,8 @@ if __name__ == "__main__":
         assert args.train_examples is None, 'args.train_file_full provided, cannot also specify args.train_examples'
 
         print("Loading input graph, training target data, and predicates from {}".format(args.train_file_full))
-        train_graph_dataset, examples, predicates_set = data_parser.parse_from_full_train_file(args.train_file_full)
-        data_binary_predicates, data_unary_predicates = list(predicates_set), []
+        train_graph_dataset, examples, predicates_list = data_parser.parse_from_full_train_file(args.train_file_full)
+        data_binary_predicates, data_unary_predicates = predicates_list, []
     else:
         print("Loading predicates from {}".format(args.predicates))
         data_binary_predicates, data_unary_predicates = load_predicates(args.predicates)

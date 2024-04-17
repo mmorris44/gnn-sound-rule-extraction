@@ -37,7 +37,9 @@ def parse_from_full_train_file(file, graph_target_split=0.1):
     split_index = int(len(dataset) * graph_target_split)
     targets = dataset[:split_index]
     input_graph = dataset[split_index:]
-    return input_graph, targets, predicates
+    predicate_list = list(predicates)
+    predicate_list.sort()  # fixes the order as alphabetical
+    return input_graph, targets, predicate_list
 
 
 def parse(file):
