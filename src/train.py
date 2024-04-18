@@ -16,7 +16,8 @@ from encoding_schemes import CanonicalEncoderDecoder, ICLREncoderDecoder
 import nodes
 import sys
 import data_parser
-from sound_rule_extraction import print_model, model_stats
+from sound_rule_extraction import print_model, model_stats, find_weight_cutoff_for_ratio_rule_channels
+from model_sparsity import weight_cutoff_model
 
 from utils import load_predicates
 from gnn_architectures import GNN
@@ -68,6 +69,19 @@ parser.add_argument('--early-stop',
                     default=50,  # -1 means no early stopping
                     type=int,
                     help='Number of epochs with worse loss than best epoch before early stopping')
+
+parser.add_argument('--weight-clamping-interval',
+                    default=-1,
+                    type=int,
+                    help='Number of epochs between weight clamping for rule channels. -1 for no weight clamping.')
+parser.add_argument('--rule-channels-min-ratio',
+                    type=float,
+                    default=-1,
+                    help='Weight cutoff will be chosen to give a number of channels corresponding to rules'
+                         'strictly greater than the ratio given, which should be in [0, 1). Applied during training.'
+                         'Such channels are either UP or 0 (i.e. monotonic increasing or do not depend on input).'
+                         'If -1, then no weight cutoff is used.')
+
 parser.add_argument('--lr',
                     default=0.01,
                     type=float,
@@ -290,6 +304,21 @@ if __name__ == "__main__":
         loss = train()
         if min_loss is None:
             min_loss = loss
+        if args.weight_clamping_interval != -1 and (epoch + 1) % args.weight_clamping_interval == 0:
+            print('Epoch: {:03d}, Loss: {:.5f}'.
+                  format(epoch, loss))
+            weight_cutoff, ratio_up, ratio_zero = find_weight_cutoff_for_ratio_rule_channels(model, args.rule_channels_min_ratio)
+            print(f'weight_cutoff: {weight_cutoff}, ratio_up: {ratio_up}, ratio_zero: {ratio_zero}')
+            weight_cutoff_model(model, weight_cutoff)
+
+            if args.use_wandb:
+                wandb.log({
+                    'epoch': epoch + 1,
+                    'weight_cutoff': weight_cutoff,
+                    'ratio_up': ratio_up,
+                    'ratio_zero': ratio_zero,
+                }, step=epoch + 1)
+
         if epoch % divisor == 0:
             print('Epoch: {:03d}, Loss: {:.5f}'.
                   format(epoch, loss))
@@ -305,7 +334,7 @@ if __name__ == "__main__":
                            "{}_Epoch{}.pt".format(args.model_name, epoch))
         if loss >= min_loss:
             num_bad_iterations += 1
-            if num_bad_iterations > max_num_bad:
+            if num_bad_iterations > max_num_bad != -1:  # -1 means no early stopping
                 print("Stopping early")
                 break
         else:
@@ -314,6 +343,7 @@ if __name__ == "__main__":
             min_loss = loss
 
     torch.save(best_model, args.model_folder + '/' + saved_model_name + '.pt')
+    print(f'Saved model "{args.model_folder}/{saved_model_name}.pt"')
 
     if args.use_wandb:
         wandb.finish()

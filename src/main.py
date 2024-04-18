@@ -68,6 +68,10 @@ parser.add_argument('--seed',
                     default=-1,  # -1 seed means seed will be chosen at random
                     type=int,
                     help='Seed used to init RNG')
+parser.add_argument('--early-stop',
+                    default=50,  # -1 means no early stopping
+                    type=int,
+                    help='Number of epochs with worse loss than best epoch before early stopping')
 parser.add_argument('--lr',
                     default=0.01,
                     type=float,
@@ -90,6 +94,10 @@ parser.add_argument('--non-negative-weights',
                     choices=[0, 1],
                     default=0,
                     help='Restrict matrix weights during training so that they are all non-negative')
+parser.add_argument('--weight-clamping-interval',
+                    default=-1,
+                    type=int,
+                    help='Number of epochs between weight clamping for rule channels. -1 for no weight clamping.')
 
 # Testing
 parser.add_argument('--test',
@@ -176,6 +184,9 @@ else:
 if args.non_negative_weights:
     model_name = model_name + '_non_negative_weights'
 
+if args.weight_clamping_interval != -1:
+    model_name = model_name + '_rule_channels_' + str(args.rule_channels_min_ratio)
+
 train_command = [
     'python',
     'train.py',
@@ -186,12 +197,15 @@ train_command = [
     '--aggregation', aggregation,
     '--non-negative-weights', str(args.non_negative_weights),
     '--layers', str(args.layers),
+    '--early-stop', str(args.early_stop),
     '--lr', str(args.lr),
     '--seed', str(args.seed),
     '--epochs', str(args.epochs),
     '--checkpoint-interval', str(args.checkpoint_interval),
     '--log-interval', str(args.log_interval),
     '--use-wandb', str(args.use_wandb),
+    '--weight-clamping-interval', str(args.weight_clamping_interval),
+    '--rule-channels-min-ratio', str(args.rule_channels_min_ratio)
 ]
 
 if args.dataset in log_infer_datasets:

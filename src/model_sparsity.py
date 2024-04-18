@@ -24,6 +24,29 @@ def weight_cutoff_model(model: gnn_architectures.GNN, weight_cutoff: float):
             threshold_matrix_values(matrix_b, weight_cutoff)
 
 
+# not in use for now
+def uniform_matrix_rows_by_count(matrix: torch.tensor, max_number_positions_to_trim: int):
+    if max_number_positions_to_trim != 0:
+        print(max_number_positions_to_trim)
+        print(matrix)
+    for row_index, row in enumerate(matrix):
+        positive_entries = row > 0
+        negative_entries = row < 0
+        positive_count_tensor = torch.zeros_like(positive_entries)
+        negative_count_tensor = torch.zeros_like(negative_entries)
+        positive_count_tensor[positive_entries] = 1
+        negative_count_tensor[negative_entries] = 1
+        positive_row_count = torch.sum(positive_count_tensor).item()
+        negative_row_count = torch.sum(negative_count_tensor).item()
+        if positive_row_count >= negative_row_count and negative_row_count <= max_number_positions_to_trim:
+            matrix[row_index][negative_entries] = 0
+        elif positive_row_count <= max_number_positions_to_trim:
+            matrix[row_index][positive_entries] = 0
+    if max_number_positions_to_trim != 0:
+        print(matrix)
+        print()
+
+
 def max_abs_value_in_matrix(matrix: torch.tensor):
     return torch.max(torch.abs(matrix))
 
