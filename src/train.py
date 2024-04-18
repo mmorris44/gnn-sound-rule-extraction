@@ -342,6 +342,8 @@ if __name__ == "__main__":
             num_bad_iterations = 0
             min_loss = loss
 
+    if max_num_bad == -1:  # Always save the latest model when not using early stopping
+        best_model = model
     torch.save(best_model, args.model_folder + '/' + saved_model_name + '.pt')
     print(f'Saved model "{args.model_folder}/{saved_model_name}.pt"')
 
