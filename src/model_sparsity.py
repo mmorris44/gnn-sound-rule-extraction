@@ -1,6 +1,7 @@
 import torch
 
 import gnn_architectures
+from sound_rule_extraction import UpDownStates
 
 
 # if negative_only==True, will only threshold negative values
@@ -65,3 +66,82 @@ def max_weight_size_in_model(model: gnn_architectures.GNN):
             if matrix_max > max_weight:
                 max_weight = matrix_max
     return max_weight
+
+
+# Find which channels are closest to being NABN, as well as which weights need to be zeroed
+# TODO: come back to this, computation blows up exponentially
+def closest_to_nabn_channels(model: gnn_architectures.GNN):
+    s0 = [[{}] for _ in range(model.layer_dimension(0))]
+
+    layer = 1
+    s1 = [[] for _ in range(model.layer_dimension(layer))]
+    for i in range(model.layer_dimension(layer)):  # row index
+        changes = {}
+
+        # All matrices in layer
+        matrices = [model.matrix_A(layer)] + [model.matrix_B(layer, colour) for colour in range(model.num_colours)]
+        for matrix_id, matrix in enumerate(matrices):
+            row_indices_to_trim, col_indices_to_trim = [], []  # Track which indices to zero out
+            for j in range(model.layer_dimension(layer - 1)):  # column index
+                if matrix[i][j] < 0:
+                    row_indices_to_trim.append(i)
+                    col_indices_to_trim.append(j)
+            changes[(layer, matrix_id)] = (row_indices_to_trim, col_indices_to_trim)
+        s1[i].append(changes)
+
+    layer = 2
+    s1 = [[] for _ in range(model.layer_dimension(layer))]
+    for i in range(model.layer_dimension(layer)):  # row index
+        changes = {}
+
+        # All matrices in layer
+        matrices = [model.matrix_A(layer)] + [model.matrix_B(layer, colour) for colour in range(model.num_colours)]
+        for matrix_id, matrix in enumerate(matrices):
+            row_indices_to_trim, col_indices_to_trim = [], []  # Track which indices to zero out
+            for j in range(model.layer_dimension(layer - 1)):  # column index
+                if matrix[i][j] < 0:
+                    row_indices_to_trim.append(i)
+                    col_indices_to_trim.append(j)
+                elif matrix[i][j] > 0:
+                    changes[(layer, matrix_id)] = s1[j]
+                    # TODO: need to check all possible ways of zeroing positive values in layer 2 (too large)
+            changes[(layer, matrix_id)] = (row_indices_to_trim, col_indices_to_trim)
+        s1[i].append(changes)
+
+
+# UpDown algorithm, but also track which weights would need to be zeroed to make the channel UP, DOWN, or ZERO
+# TODO: revisit later, blows up massively computationally
+def up_down_with_trim(model):
+    # Outer list contains an entry for each channel
+    # Inner list contains pairs
+    # Pair is (State, Dict[(Int, Int), tensor]), where State is UP, DOWN, ZERO (only UP for now)
+    # Each key in dictionary is (layer, matrix_id)
+    # Each matrix ID is: A = 0, B_0 = 1, B_1 = 2, ...
+    # Each tensor is a mask of the minimal entries that need to become zero to obtain the given state
+    #
+    # If a key isn't given for a matrix, it is assumed that no changes are needed to that matrix
+    # There can be multiple entries in the list for a single state, giving different options for how to obtain it
+    s0 = [[(UpDownStates.UP, {})] for _ in model.layer_dimension(0)]
+    states = [s0]
+
+    for layer in range(1, model.num_layers + 1):
+        sl = [[] for _ in model.layer_dimension(layer)]
+
+        for i in range(model.layer_dimension(layer)):  # row index
+            # Try to make the channel UP
+            changes = {}
+
+            # All matrices in layer
+            matrices = [model.matrix_A(layer)] + [model.matrix_B(layer, colour) for colour in range(model.num_colours)]
+            for matrix_id, matrix in enumerate(matrices):
+                row_indices_to_trim, col_indices_to_trim = [], []  # Track which indices to zero out
+                for j in range(model.layer_dimension(layer - 1)):  # column index
+                    if matrix[i][j] < 0:  # Assuming all previous states were UP
+                        row_indices_to_trim.append(i)
+                        col_indices_to_trim.append(j)
+                changes[(layer, matrix_id)] = (row_indices_to_trim, col_indices_to_trim)
+
+            sl[i].append((UpDownStates.UP, changes))
+
+        states.append(sl)
+    return states[-1]

@@ -314,7 +314,7 @@ if __name__ == "__main__":
             if args.use_wandb:
                 wandb.log({
                     'epoch': epoch + 1,
-                    'weight_cutoff': weight_cutoff,
+                    'train_weight_cutoff': weight_cutoff,
                     'ratio_up': ratio_up,
                     'ratio_zero': ratio_zero,
                 }, step=epoch + 1)

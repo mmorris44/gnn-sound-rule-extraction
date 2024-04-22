@@ -109,7 +109,6 @@ class UpDownStates(Enum):
 
 
 def up_down(model):
-    # 0 = up, 1 = down, 2 = 0, 3 = ?
     s0 = [UpDownStates.UP] * model.layer_dimension(0)
     states = [s0]
     for layer in range(1, model.num_layers + 1):
