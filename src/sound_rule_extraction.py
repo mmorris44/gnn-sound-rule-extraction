@@ -6,9 +6,11 @@ from enum import Enum
 from typing import List
 
 import torch
+from torch_geometric.data import Data
 
 import gnn_architectures
 from model_sparsity import weight_cutoff_model, max_weight_size_in_model
+from encoding_schemes import ICLREncoderDecoder, CanonicalEncoderDecoder
 
 
 def value_breakdown(matrix: torch.tensor, ratio=True):
@@ -301,6 +303,163 @@ def find_weight_cutoff_for_ratio_rule_channels(model: gnn_architectures.GNN,
     return max_cutoff.item(), final_ratio_up, final_ratio_zero
 
 
+# compute all partitions of a set
+def partition(collection):
+    if len(collection) == 1:
+        yield [collection]
+        return
+
+    first = collection[0]
+    for smaller in partition(collection[1:]):
+        # insert `first` in each of the subpartition's subsets
+        for n, subset in enumerate(smaller):
+            yield smaller[:n] + [[first] + subset] + smaller[n+1:]
+        # put `first` in its own subset
+        yield [[first]] + smaller
+
+
+def all_variable_groundings(var_set: set):
+    var_list = list(var_set)
+    partitions = list(partition(var_list))
+    groundings = []
+    for p in partitions:
+        grounding = {}
+        for i, group in enumerate(p):
+            grounding.update({var: var_list[i] for var in group})
+        groundings.append(grounding)
+    return groundings
+
+
+def is_monotonic_rule_captured(
+        model: gnn_architectures.GNN,
+        threshold: float,
+        iclr_encoder_decoder: ICLREncoderDecoder,
+        can_encoder_decoder: CanonicalEncoderDecoder,
+        rule: str,
+):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    parts = rule.split(' implies ')
+    assert len(parts) == 2, 'Should only be body and head'
+    body_str, head_str = parts
+    assert ' not ' not in body_str, 'Only monotonic rules can be extracted'
+    body_atoms = body_str.split(' and ')
+    rule_body = []
+    var_set = set()
+
+    # get rule body
+    for atom in body_atoms:
+        # get variables
+        atom_comma_parts = atom.split(',')
+        assert len(atom_comma_parts) == 2, 'Only binary predicates supported for now'
+        var1 = atom_comma_parts[0][-1]
+        var2 = atom_comma_parts[1][0]
+        var_set.add(var1)
+        var_set.add(var2)
+        # get predicate
+        atom_bracket_parts = atom.split('(')
+        assert len(atom_bracket_parts) == 2, 'Should only be a single opening bracket in rule'
+        predicate = atom_bracket_parts[0]
+        rule_body.append((var1, predicate, var2))
+
+    # get rule head
+    atom = head_str
+    # get variables
+    atom_comma_parts = atom.split(',')
+    assert len(atom_comma_parts) == 2, 'Only binary predicates supported for now'
+    var1 = atom_comma_parts[0][-1]
+    var2 = atom_comma_parts[1][0]
+    # get predicate
+    atom_bracket_parts = atom.split('(')
+    assert len(atom_bracket_parts) == 2, 'Should only be a single opening bracket in rule'
+    predicate = atom_bracket_parts[0]
+    rule_head = (var1, predicate, var2)
+
+    # consider all possible ways of grounding the body
+    variable_groundings = all_variable_groundings(var_set)
+    entailed_in_all_groundings = True
+
+    for grounding in variable_groundings:
+        ground_body = [(grounding[var1], predicate, grounding[var2]) for (var1, predicate, var2) in rule_body]
+        ground_head = (grounding[rule_head[0]], rule_head[1], grounding[rule_head[2]])
+        cd_dataset = iclr_encoder_decoder.encode_dataset(ground_body)
+        (gr_features, gr_nodes, gr_edge_list, gr_colour_list) = can_encoder_decoder.encode_dataset(cd_dataset)
+        gr_dataset = Data(x=gr_features, edge_index=gr_edge_list, edge_type=gr_colour_list).to(device)
+        gnn_output_gr = model(gr_dataset)
+
+        cd_output_dataset_scores_dict = can_encoder_decoder.decode_graph(gr_nodes, gnn_output_gr, threshold)
+        facts_scores_dict = {}
+        for (s, p, o) in cd_output_dataset_scores_dict:
+            ss, pp, oo = iclr_encoder_decoder.decode_fact(s, p, o)
+            facts_scores_dict[(ss, pp, oo)] = cd_output_dataset_scores_dict[(s, p, o)]
+
+        if ground_head not in facts_scores_dict:
+            entailed_in_all_groundings = False
+            break
+
+    return entailed_in_all_groundings
+
+
+# check if rules given in file are captured
+def check_given_rules(
+        model: gnn_architectures.GNN,
+        rules_file: str,
+        canonical_encoder_file: str,
+        iclr22_encoder_file: str,
+        model_threshold: float,
+):
+    rules = []
+    with open(rules_file) as file_in:
+        for line in file_in:
+            rules.append(line)
+
+    can_encoder_decoder = CanonicalEncoderDecoder(load_from_document=canonical_encoder_file)
+    iclr_encoder_decoder = ICLREncoderDecoder(load_from_document=iclr22_encoder_file)
+
+    # get alg outputs
+    final_up_down_state = up_down(model)
+    neg_inf_channels = neg_inf_line(model)
+
+    captured = []  # either 0 = "yes", 1 = "no due to neg-inf-line", 2 = "no due to body not entailing"
+    # 3 = "cannot be checked", for each monotonic rule in the rules file
+
+    for rule in rules:
+        if ' not ' in rule:
+            continue  # cannot check non-monotonic rules
+
+        # get head predicate index
+        head_predicate = rule.split(' implies ')[1].split('(')[0]
+        cd_dataset = iclr_encoder_decoder.encode_dataset([('x', head_predicate, 'x')])
+        (gr_features, gr_nodes, gr_edge_list, gr_colour_list) = can_encoder_decoder.encode_dataset(cd_dataset)
+        predicate_index_tensor = torch.nonzero(gr_features[0])
+        assert predicate_index_tensor.size() == torch.Size([1, 1]), 'Should only be one predicate in vector'
+        predicate_index = predicate_index_tensor[0].item()
+
+        # check neg inf
+        neg_inf_channels[predicate_index] = False  # TODO: some debugging
+        if neg_inf_channels[predicate_index]:
+            captured.append(1)
+            continue
+
+        # check if entailed by all groundings of the body
+        rule_true_for_body_groundings = is_monotonic_rule_captured(
+            loaded_model, model_threshold, iclr_encoder_decoder, can_encoder_decoder, rule)
+        if not rule_true_for_body_groundings:
+            captured.append(2)
+            continue
+
+        # check UpDown
+        if final_up_down_state[predicate_index] != UpDownStates.UP:
+            captured.append(3)
+            continue
+
+        # Otherwise, UpDown is UP and rule is captured, so the rule is captured
+        if final_up_down_state[predicate_index] == UpDownStates.UP and rule_true_for_body_groundings:
+            captured.append(0)
+            continue
+    return captured
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Extract sound rules")
     parser.add_argument('--model-path', help='Path to model file')
@@ -312,6 +471,17 @@ if __name__ == '__main__':
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     loaded_model: gnn_architectures.GNN = torch.load(args.model_path).to(device)
+
+    ans = check_given_rules(
+        loaded_model,
+        '../data/LogInfer/LogInfer-benchmark/LogInfer-WN-hier_nmhier/final-rules-LogInfer-WN-hier_nmhier.txt',
+        '../encoders/LogInfer-WN-hier_nmhier_layers_2_lr_0.001_seed_1_rule_channels_0.0_canonical.tsv',
+        '../encoders/LogInfer-WN-hier_nmhier_layers_2_lr_0.001_seed_1_rule_channels_0.0_iclr22.tsv',
+        0.0001,
+    )
+    print(ans)
+
+    assert False
 
     if args.weight_cutoff != 0:
         weight_cutoff_model(loaded_model, args.weight_cutoff)

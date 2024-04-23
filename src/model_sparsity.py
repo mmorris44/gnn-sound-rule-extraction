@@ -1,7 +1,6 @@
 import torch
 
 import gnn_architectures
-from sound_rule_extraction import UpDownStates
 
 
 # if negative_only==True, will only threshold negative values
@@ -121,7 +120,7 @@ def up_down_with_trim(model):
     #
     # If a key isn't given for a matrix, it is assumed that no changes are needed to that matrix
     # There can be multiple entries in the list for a single state, giving different options for how to obtain it
-    s0 = [[(UpDownStates.UP, {})] for _ in model.layer_dimension(0)]
+    s0 = [[(1, {})] for _ in model.layer_dimension(0)]
     states = [s0]
 
     for layer in range(1, model.num_layers + 1):
@@ -141,7 +140,7 @@ def up_down_with_trim(model):
                         col_indices_to_trim.append(j)
                 changes[(layer, matrix_id)] = (row_indices_to_trim, col_indices_to_trim)
 
-            sl[i].append((UpDownStates.UP, changes))
+            sl[i].append((1, changes))
 
         states.append(sl)
     return states[-1]
