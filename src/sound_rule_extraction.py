@@ -400,6 +400,13 @@ def is_monotonic_rule_captured(
     return entailed_in_all_groundings
 
 
+class RuleCaptureStates(Enum):
+    Yes = 0
+    NoNegInf = 1
+    NoBodyNotEntail = 2
+    CannotCheck = 3
+
+
 # check if rules given in file are captured
 def check_given_rules(
         model: gnn_architectures.GNN,
@@ -420,8 +427,14 @@ def check_given_rules(
     final_up_down_state = up_down(model)
     neg_inf_channels = neg_inf_line(model)
 
-    captured = []  # either 0 = "yes", 1 = "no due to neg-inf-line", 2 = "no due to body not entailing"
+    # values are either 0 = "yes", 1 = "no due to neg-inf-line", 2 = "no due to body not entailing"
     # 3 = "cannot be checked", for each monotonic rule in the rules file
+    # entry in dict for each monotonic rule in the file
+    captured = {}
+
+    # key is each unique head predicate
+    # value is True iff predicate is UP for UpDown algorithm
+    rule_head_predicates_checkable = {}
 
     for rule in rules:
         if ' not ' in rule:
@@ -435,29 +448,31 @@ def check_given_rules(
         assert predicate_index_tensor.size() == torch.Size([1, 1]), 'Should only be one predicate in vector'
         predicate_index = predicate_index_tensor[0].item()
 
+        # save whether head predicate is checkable
+        rule_head_predicates_checkable[head_predicate] = (final_up_down_state[predicate_index] == UpDownStates.UP)
+
         # check neg inf
-        neg_inf_channels[predicate_index] = False  # TODO: some debugging
         if neg_inf_channels[predicate_index]:
-            captured.append(1)
+            captured[rule] = RuleCaptureStates.NoNegInf
             continue
 
         # check if entailed by all groundings of the body
         rule_true_for_body_groundings = is_monotonic_rule_captured(
-            loaded_model, model_threshold, iclr_encoder_decoder, can_encoder_decoder, rule)
+            model, model_threshold, iclr_encoder_decoder, can_encoder_decoder, rule)
         if not rule_true_for_body_groundings:
-            captured.append(2)
+            captured[rule] = RuleCaptureStates.NoBodyNotEntail
             continue
 
         # check UpDown
         if final_up_down_state[predicate_index] != UpDownStates.UP:
-            captured.append(3)
+            captured[rule] = RuleCaptureStates.CannotCheck
             continue
 
         # Otherwise, UpDown is UP and rule is captured, so the rule is captured
         if final_up_down_state[predicate_index] == UpDownStates.UP and rule_true_for_body_groundings:
-            captured.append(0)
+            captured[rule] = RuleCaptureStates.Yes
             continue
-    return captured
+    return captured, rule_head_predicates_checkable
 
 
 if __name__ == '__main__':
@@ -471,17 +486,6 @@ if __name__ == '__main__':
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     loaded_model: gnn_architectures.GNN = torch.load(args.model_path).to(device)
-
-    ans = check_given_rules(
-        loaded_model,
-        '../data/LogInfer/LogInfer-benchmark/LogInfer-WN-hier_nmhier/final-rules-LogInfer-WN-hier_nmhier.txt',
-        '../encoders/LogInfer-WN-hier_nmhier_layers_2_lr_0.001_seed_1_rule_channels_0.0_canonical.tsv',
-        '../encoders/LogInfer-WN-hier_nmhier_layers_2_lr_0.001_seed_1_rule_channels_0.0_iclr22.tsv',
-        0.0001,
-    )
-    print(ans)
-
-    assert False
 
     if args.weight_cutoff != 0:
         weight_cutoff_model(loaded_model, args.weight_cutoff)

@@ -5,7 +5,7 @@ import torch
 import wandb
 
 from sound_rule_extraction import find_weight_cutoff_for_ratio_rule_channels, model_stats, nabn, up_down, UpDownStates, \
-    neg_inf_line
+    neg_inf_line, check_given_rules, RuleCaptureStates
 import gnn_architectures
 from model_sparsity import weight_cutoff_model
 
@@ -127,6 +127,16 @@ parser.add_argument('--extract',
                     choices=[0, 1],
                     default=0,
                     help='Run and log the outputs of the rule extraction algorithms?')
+parser.add_argument('--log-infer-rule-check',
+                    type=int,
+                    choices=[0, 1],
+                    default=0,
+                    help='Check if LogInfer rules are captured by the model.')
+parser.add_argument('--search-rule-check',  # TODO: implement
+                    type=int,
+                    choices=[0, 1],
+                    default=0,
+                    help='Search space of possible rules to see which ones are captured.')
 
 # Logging
 parser.add_argument('--use-wandb',
@@ -269,18 +279,32 @@ elif args.evaluation_set == 'test':
         '--use-optimal-threshold', '1',
     ]
 
-if args.test:
-    print('Testing...')
+
+def get_model_and_weight_cutoff():
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model: gnn_architectures.GNN = torch.load(load_model_name).to(device)
+    weight_cutoff = -1
 
     if args.rule_channels_min_ratio != -1:
         print(f'Searching for a weight cutoff to obtain a ratio of >{args.rule_channels_min_ratio} rule channels')
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        model: gnn_architectures.GNN = torch.load(load_model_name).to(device)
-        weight_cutoff, ratio_up, ratio_zero = find_weight_cutoff_for_ratio_rule_channels(
+        weight_cutoff, _, _ = find_weight_cutoff_for_ratio_rule_channels(
             model,
             args.rule_channels_min_ratio,
         )
         print(f'Cutoff {weight_cutoff} found')
+        if args.use_wandb:
+            wandb.log({
+                'weight_cutoff': weight_cutoff,
+            })
+
+    return model, weight_cutoff
+
+
+if args.test:
+    print('Testing...')
+
+    if args.rule_channels_min_ratio != -1:
+        _, weight_cutoff = get_model_and_weight_cutoff()
         test_command = test_command + [
             '--weight-cutoff', str(weight_cutoff),
         ]
@@ -291,20 +315,8 @@ if args.test:
 if args.extract:
     print('Running rule extraction algorithms...')
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model: gnn_architectures.GNN = torch.load(load_model_name).to(device)
-
+    model, weight_cutoff = get_model_and_weight_cutoff()
     if args.rule_channels_min_ratio != -1:
-        print(f'Searching for a weight cutoff to obtain a ratio of >{args.rule_channels_min_ratio} rule channels')
-        weight_cutoff, ratio_up, ratio_zero = find_weight_cutoff_for_ratio_rule_channels(
-            model,
-            args.rule_channels_min_ratio,
-        )
-        print(f'Cutoff {weight_cutoff} found')
-        if args.use_wandb:
-            wandb.log({
-                'weight_cutoff': weight_cutoff,
-            })
         weight_cutoff_model(model, weight_cutoff)
 
     print('-----\nModel stats:')
@@ -315,6 +327,7 @@ if args.extract:
     print(final_state)
     nabn_ratio = final_state.count(0) / len(final_state)
     print('Ratio of rule heads that can be checked:', nabn_ratio)
+
     print('-----\nUp-Down:')
     final_state = up_down(model)
     print(final_state)
@@ -326,6 +339,7 @@ if args.extract:
     print('Monotonically decreasing:', up_down_ratio_down)
     print('Zero:', up_down_ratio_zero)
     print('Unknown:', up_down_ratio_unknown)
+
     print('-----\nNeg-Inf-Line:')
     neg_inf_channels = neg_inf_line(model)
     print(neg_inf_channels)
@@ -344,6 +358,43 @@ if args.extract:
             'up_down_ratio_zero': up_down_ratio_zero,
             'up_down_ratio_unknown': up_down_ratio_unknown,
             'neg_inf_ratio': neg_inf_ratio,
+        })
+
+if args.log_infer_rule_check:
+    model, weight_cutoff = get_model_and_weight_cutoff()
+    if args.rule_channels_min_ratio != -1:
+        weight_cutoff_model(model, weight_cutoff)
+
+    eval_threshold_key = args.rule_channels_min_ratio
+    assert eval_threshold_key in model.eval_thresholds, 'Optimal threshold must first be set on valid dataset'
+
+    captured, rule_head_predicates_checkable = check_given_rules(
+        model,
+        f'{path_to_dataset}/final-rules-{args.dataset}-{args.log_infer_pattern}.txt',
+        canonical_encoder_file,
+        iclr22_encoder_file,
+        model.eval_thresholds[eval_threshold_key],
+    )
+
+    print('Rule capture states:', captured)
+    print('Heads that are UP:', rule_head_predicates_checkable)
+
+    captured_values = list(captured.values())
+    log_infer_ratio_captured = captured_values.count(RuleCaptureStates.Yes) / len(captured_values)
+    log_infer_ratio_no_neg_inf = captured_values.count(RuleCaptureStates.NoNegInf) / len(captured_values)
+    log_infer_ratio_no_body_not_entail = captured_values.count(RuleCaptureStates.NoBodyNotEntail) / len(captured_values)
+    log_infer_ratio_cannot_check = captured_values.count(RuleCaptureStates.CannotCheck) / len(captured_values)
+
+    rule_head_predicates_checkable_values = list(rule_head_predicates_checkable.values())
+    log_infer_ratio_up_heads = rule_head_predicates_checkable_values.count(True) / len(rule_head_predicates_checkable_values)
+
+    if args.use_wandb:
+        wandb.log({
+            'log_infer_ratio_captured': log_infer_ratio_captured,
+            'log_infer_ratio_no_neg_inf': log_infer_ratio_no_neg_inf,
+            'log_infer_ratio_no_body_not_entail': log_infer_ratio_no_body_not_entail,
+            'log_infer_ratio_cannot_check': log_infer_ratio_cannot_check,
+            'log_infer_ratio_up_heads': log_infer_ratio_up_heads,
         })
 
 if args.use_wandb:
