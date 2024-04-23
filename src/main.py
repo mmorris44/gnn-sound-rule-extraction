@@ -195,7 +195,8 @@ if args.non_negative_weights:
     model_name = model_name + '_non_negative_weights'
 
 if args.weight_clamping_interval != -1:
-    model_name = model_name + '_rule_channels_' + str(args.rule_channels_min_ratio)
+    model_name = model_name + '_rule_channels_' + str(args.rule_channels_min_ratio)\
+                 + '_clamp_interval_' + str(args.weight_clamping_interval)
 
 train_command = [
     'python',
