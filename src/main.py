@@ -44,8 +44,10 @@ log_infer_patterns = [
     'sym',
     'fork',  # Only for WN so far (FB generation taking too much memory)
     'cup',
-    'nmhier',  # Only for WN so far, trial of non-monotonic dataset
-    'hier_nmhier'  # Only for WN so far, mix of monotonic and non-monotonic
+    'nmhier',  # Only for WN so far, non-monotonic dataset
+    'hier_nmhier',
+    'cup_nmhier',
+    'superhier',
 ]
 
 negative_sampling_methods = ['rb', 'rc', 'pc', 'nm', 'pc_nm']
