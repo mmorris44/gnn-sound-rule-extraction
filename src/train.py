@@ -311,7 +311,7 @@ if __name__ == "__main__":
             print(f'weight_cutoff: {weight_cutoff}, ratio_up: {ratio_up}, ratio_zero: {ratio_zero}')
             weight_cutoff_model(model, weight_cutoff)
 
-            if args.use_wandb:
+            if args.use_wandb and epoch % divisor == 0:
                 wandb.log({
                     'epoch': epoch + 1,
                     'train_weight_cutoff': weight_cutoff,
