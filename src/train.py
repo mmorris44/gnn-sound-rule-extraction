@@ -305,19 +305,20 @@ if __name__ == "__main__":
         if min_loss is None:
             min_loss = loss
         if args.weight_clamping_interval != -1 and (epoch + 1) % args.weight_clamping_interval == 0:
-            print('Epoch: {:03d}, Loss: {:.5f}'.
-                  format(epoch, loss))
+
             weight_cutoff, ratio_up, ratio_zero = find_weight_cutoff_for_ratio_rule_channels(model, args.rule_channels_min_ratio)
-            print(f'weight_cutoff: {weight_cutoff}, ratio_up: {ratio_up}, ratio_zero: {ratio_zero}')
             weight_cutoff_model(model, weight_cutoff)
 
-            if args.use_wandb and epoch % divisor == 0:
-                wandb.log({
-                    'epoch': epoch + 1,
-                    'train_weight_cutoff': weight_cutoff,
-                    'ratio_up': ratio_up,
-                    'ratio_zero': ratio_zero,
-                }, step=epoch + 1)
+            if epoch % divisor == 0:
+                print(f'weight_cutoff: {weight_cutoff}, ratio_up: {ratio_up}, ratio_zero: {ratio_zero}')
+
+                if args.use_wandb:
+                    wandb.log({
+                        'epoch': epoch + 1,
+                        'train_weight_cutoff': weight_cutoff,
+                        'ratio_up': ratio_up,
+                        'ratio_zero': ratio_zero,
+                    }, step=epoch + 1)
 
         if epoch % divisor == 0:
             print('Epoch: {:03d}, Loss: {:.5f}'.
