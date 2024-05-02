@@ -218,25 +218,16 @@ def neg_inf_line(model, algorithm_iterations=1000):
 
         # track current value of latest reached node
         # x, y in (x + dy)
-        neighbour_x_value = torch.zeros(model.layer_dimension(0))  # set initial x-component to 0
-        # TODO: do we actually need to track the x_value? Seems like not
         neighbour_y_value = torch.clone(initial_value)  # set y-component to initial value
-        current_unreached_value = torch.clone(initial_value)  # tracks current value of an unreached node in the line
 
         # In first layer:
-        # neighbour_x_value, neighbour_y_value refer to the fan nodes
         # d(Bv) = B(dv), so y-component is set to initial_value v
         # This tracks the sum of all the neighbours of the node connected to the fan
         # Equivalent to having one neighbour with feature equal to that sum
-        # current_unreached_value refers to the node connected to the fan
 
         # Stop one short of final layer, since final layer is what will pass the infinities to the root node
         for layer in range(1, model.num_layers):
             # Compute default x and y values (as if y > 0)
-            # first part of x_value comes from current unreached value
-            x_value = model.bias(layer) + torch.matmul(model.matrix_A(layer), current_unreached_value)
-            # add x_value from neighbour as well
-            x_value += torch.matmul(model.matrix_B(layer, colour_sequence[layer - 1]), neighbour_x_value)
             # y_value comes from neighbour, which are "current" values
             y_value = torch.matmul(model.matrix_B(layer, colour_sequence[layer - 1]), neighbour_y_value)
 
@@ -245,16 +236,7 @@ def neg_inf_line(model, algorithm_iterations=1000):
             # y > 0 means that as d tends to infinity, (x + dy) tends to infinity, so the ReLU drops away
             # y < 0 means that as d tends to infinity, (x + dy) tends to negative infinity, so the output of ReLU is 0
             y_mask = y_value > 0
-            neighbour_x_value = torch.where(y_mask > 0, x_value, 0)
-            neighbour_y_value = torch.where(y_mask > 0, y_value, 0)
-
-            # Update unreached value
-            # \sigma(Av + b + Bu), where u, v are both the current unreached value
-            current_unreached_value = model.activation(layer)(
-                torch.matmul(model.matrix_A(layer), current_unreached_value)
-                + model.bias(layer)
-                + torch.matmul(model.matrix_B(layer, colour_sequence[layer - 1]), current_unreached_value)
-            )  # TODO: using wrong colour values here
+            neighbour_y_value = torch.where(y_mask > 0, y_value, 0)  # ReLU
 
         # Compute final values that will be passed
         y_value = torch.matmul(model.matrix_B(model.num_layers, colour_sequence[model.num_layers - 1]), neighbour_y_value)
