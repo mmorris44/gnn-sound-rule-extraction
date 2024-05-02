@@ -110,7 +110,7 @@ class UpDownStates(Enum):
     UNKNOWN = 3
 
 
-def up_down(model):
+def old_up_down(model):
     s0 = [UpDownStates.UP] * model.layer_dimension(0)
     states = [s0]
     for layer in range(1, model.num_layers + 1):
@@ -142,13 +142,15 @@ def up_down(model):
                 # Monotonically increasing
                 if (pos and sj == UpDownStates.UP) or (neg and sj == UpDownStates.DOWN):
                     up_exists_pair = True
-                if (neg and sj == UpDownStates.UP) or (pos and sj == UpDownStates.DOWN) or (neg and sj == UpDownStates.UNKNOWN) or (pos and sj == UpDownStates.UNKNOWN):
+                if (neg and sj == UpDownStates.UP) or (pos and sj == UpDownStates.DOWN) or (
+                        neg and sj == UpDownStates.UNKNOWN) or (pos and sj == UpDownStates.UNKNOWN):
                     up_excluded_pair = True
 
                 # Monotonically decreasing
                 if (neg and sj == UpDownStates.UP) or (pos and sj == UpDownStates.DOWN):
                     down_exists_pair = True
-                if (pos and sj == UpDownStates.UP) or (neg and sj == UpDownStates.DOWN) or (pos and sj == UpDownStates.UNKNOWN) or (neg and sj == UpDownStates.UNKNOWN):
+                if (pos and sj == UpDownStates.UP) or (neg and sj == UpDownStates.DOWN) or (
+                        pos and sj == UpDownStates.UNKNOWN) or (neg and sj == UpDownStates.UNKNOWN):
                     down_excluded_pair = True
 
                 # Zero
@@ -161,6 +163,63 @@ def up_down(model):
                 sl[i] = UpDownStates.DOWN
             elif not zero_excluded_pair:
                 sl[i] = UpDownStates.ZERO
+
+        states.append(sl)
+    return states[-1]
+
+
+def up_down(model):
+    s0 = [UpDownStates.UP] * model.layer_dimension(0)
+    states = [s0]
+    for layer in range(1, model.num_layers + 1):
+        sl = [UpDownStates.UNKNOWN] * model.layer_dimension(layer)
+
+        for i in range(model.layer_dimension(layer)):
+            up_excluded_pair, down_excluded_pair, zero_excluded_pair = False, False, False
+
+            for j in range(model.layer_dimension(layer - 1)):
+                pos_a, neg_a, pos_b, neg_b = False, False, False, False
+                if model.matrix_A(layer)[i][j] > 0:
+                    pos_a = True
+                for colour in range(model.num_colours):
+                    if model.matrix_B(layer, colour)[i][j] > 0:
+                        pos_b = True
+                        break
+                if model.matrix_A(layer)[i][j] < 0:
+                    neg_a = True
+                for colour in range(model.num_colours):
+                    if model.matrix_B(layer, colour)[i][j] < 0:
+                        neg_b = True
+                        break
+
+                zero_a = not (pos_a or neg_a)
+                zero_b = not (pos_b or neg_b)
+                sj = states[layer - 1][j]  # state of channel j at layer l-1
+
+                # Stable
+                if not ((sj == UpDownStates.ZERO and zero_b) or (zero_a and zero_b)):
+                    zero_excluded_pair = True
+
+                # Increasing
+                if (neg_a and sj in {UpDownStates.UP, UpDownStates.UNKNOWN}) or \
+                        (pos_a and sj in {UpDownStates.DOWN, UpDownStates.UNKNOWN}) or \
+                        (not zero_b and sj in {UpDownStates.DOWN, UpDownStates.UNKNOWN}) or \
+                        neg_b:
+                    up_excluded_pair = True
+
+                # Decreasing
+                if (pos_a and sj in {UpDownStates.UP, UpDownStates.UNKNOWN}) or \
+                        (neg_a and sj in {UpDownStates.DOWN, UpDownStates.UNKNOWN}) or \
+                        (not zero_b and sj in {UpDownStates.DOWN, UpDownStates.UNKNOWN}) or \
+                        pos_b:
+                    down_excluded_pair = True
+
+            if not zero_excluded_pair:
+                sl[i] = UpDownStates.ZERO
+            elif not up_excluded_pair:
+                sl[i] = UpDownStates.UP
+            elif not down_excluded_pair:
+                sl[i] = UpDownStates.DOWN
 
         states.append(sl)
     return states[-1]
@@ -239,7 +298,8 @@ def neg_inf_line(model, algorithm_iterations=1000):
             neighbour_y_value = torch.where(y_mask > 0, y_value, 0)  # ReLU
 
         # Compute final values that will be passed
-        y_value = torch.matmul(model.matrix_B(model.num_layers, colour_sequence[model.num_layers - 1]), neighbour_y_value)
+        y_value = torch.matmul(model.matrix_B(model.num_layers, colour_sequence[model.num_layers - 1]),
+                               neighbour_y_value)
 
         # If y value is negative, then d can be made arbitrary large to pass negative infinity
         y_value_neg_mask = y_value < 0
@@ -295,7 +355,7 @@ def partition(collection):
     for smaller in partition(collection[1:]):
         # insert `first` in each of the subpartition's subsets
         for n, subset in enumerate(smaller):
-            yield smaller[:n] + [[first] + subset] + smaller[n+1:]
+            yield smaller[:n] + [[first] + subset] + smaller[n + 1:]
         # put `first` in its own subset
         yield [[first]] + smaller
 
