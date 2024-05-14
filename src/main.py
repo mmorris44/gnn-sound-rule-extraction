@@ -134,7 +134,7 @@ parser.add_argument('--log-infer-rule-check',
                     choices=[0, 1],
                     default=0,
                     help='Check if LogInfer rules are captured by the model.')
-parser.add_argument('--search-rule-check',  # TODO: implement
+parser.add_argument('--search-rule-check',  # TODO (later): implement
                     type=int,
                     choices=[0, 1],
                     default=0,
@@ -186,9 +186,9 @@ elif args.dataset in log_infer_datasets:
     encoding_scheme = 'iclr22'
     path_to_dataset = f'../data/LogInfer/LogInfer-benchmark/{args.dataset}-{args.log_infer_pattern}'
     train_file_full = f'{path_to_dataset}/train.txt'
-    # note: 'rb' must be hard coded into model name if you want to access models trained before 20 March 2024
-    # TODO: note that negative dataset not specified in model, since it does not affect training
-    # TODO: however, it does affect hyperparameter tuning, so include in name if want to use different negative sets
+    # note that negative dataset not specified in model, since it does not affect training
+    # TODO: however, it does affect hyperparameter tuning
+    #  so include in name if want to use different negative sets during training
     model_name = f'{args.dataset}-{args.log_infer_pattern}_layers_{args.layers}_lr_{args.lr}_seed_{args.seed}'
 else:
     assert False, f'Dataset "{args.dataset}" not recognized'
