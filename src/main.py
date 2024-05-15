@@ -422,7 +422,7 @@ if args.search_rule_check:
         print(sample_rule)
         if args.use_wandb:
             wandb.log({f'sound_rules_with_{num_body_atoms}_body_atoms': num_captured})
-            wandb.log({f'sample_rule': sample_rule})
+            wandb.log({f'sample_rule_with_{num_body_atoms}_body_atoms': sample_rule})
 
 if args.use_wandb:
     wandb.finish()
