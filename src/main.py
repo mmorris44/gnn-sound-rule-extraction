@@ -5,7 +5,7 @@ import torch
 import wandb
 
 from sound_rule_extraction import find_weight_cutoff_for_ratio_rule_channels, model_stats, nabn, up_down, UpDownStates, \
-    neg_inf_line, check_given_rules, RuleCaptureStates
+    neg_inf_line, check_given_rules, RuleCaptureStates, check_all_rules
 import gnn_architectures
 from model_sparsity import weight_cutoff_model
 
@@ -134,7 +134,7 @@ parser.add_argument('--log-infer-rule-check',
                     choices=[0, 1],
                     default=0,
                     help='Check if LogInfer rules are captured by the model.')
-parser.add_argument('--search-rule-check',  # TODO (later): implement
+parser.add_argument('--search-rule-check',
                     type=int,
                     choices=[0, 1],
                     default=0,
@@ -399,6 +399,27 @@ if args.log_infer_rule_check:
             'log_infer_ratio_cannot_check': log_infer_ratio_cannot_check,
             'log_infer_ratio_up_heads': log_infer_ratio_up_heads,
         })
+
+if args.search_rule_check:
+    model, weight_cutoff = get_model_and_weight_cutoff()
+    if args.rule_channels_min_ratio != -1:
+        weight_cutoff_model(model, weight_cutoff)
+
+    eval_threshold_key = args.rule_channels_min_ratio
+    assert eval_threshold_key in model.eval_thresholds, 'Optimal threshold must first be set on valid dataset'
+
+    body_atoms = [1, 2]
+    for num_body_atoms in body_atoms:
+        num_captured = check_all_rules(
+            model,
+            canonical_encoder_file,
+            iclr22_encoder_file,
+            model.eval_thresholds[eval_threshold_key],
+            num_body_atoms,
+        )
+        print(f'{num_captured} rules with {num_body_atoms} body atom(s) are sound')
+        if args.use_wandb:
+            wandb.log({f'sound_rules_with_{num_body_atoms}_body_atoms': num_captured})
 
 if args.use_wandb:
     wandb.finish()

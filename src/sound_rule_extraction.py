@@ -442,6 +442,188 @@ def is_monotonic_rule_captured(
     return entailed_in_all_groundings
 
 
+# check if all rules with given number of body atoms are captured
+def check_all_rules(
+    model: gnn_architectures.GNN,
+    canonical_encoder_file: str,
+    iclr22_encoder_file: str,
+    model_threshold: float,
+    num_body_atoms: int,
+):
+    if num_body_atoms == 1:
+        return check_all_rules_one_body_atom(model, canonical_encoder_file, iclr22_encoder_file, model_threshold)
+    elif num_body_atoms == 2:
+        return check_all_rules_two_body_atoms(model, canonical_encoder_file, iclr22_encoder_file, model_threshold)
+    raise Exception('Number of body atoms not supported for checking yet')
+
+
+# check if all rules with one body atom are captured
+def check_all_rules_one_body_atom(
+    model: gnn_architectures.GNN,
+    canonical_encoder_file: str,
+    iclr22_encoder_file: str,
+    model_threshold: float,
+):
+    rules = []
+    can_encoder_decoder = CanonicalEncoderDecoder(load_from_document=canonical_encoder_file)
+    iclr_encoder_decoder = ICLREncoderDecoder(load_from_document=iclr22_encoder_file)
+
+    # get alg outputs
+    final_up_down_state = up_down(model)
+
+    # list of predicates
+    predicate_list = list(iclr_encoder_decoder.input_predicate_to_unary_canonical_dict.keys())
+
+    body_predicate_options = predicate_list[:]
+    body_variable_options = [('x', 'y'), ('x', 'x')]
+    bodies = []
+    for body_predicate in body_predicate_options:
+        for body_variables in body_variable_options:
+            bodies.append((body_predicate, body_variables[0], body_variables[1]))
+
+    head_predicate_options = predicate_list[:]
+    head_variable_options = [('x', 'y'), ('x', 'x'), ('y', 'x'), ('y', 'y')]
+    heads = []
+    for index, head_predicate in enumerate(head_predicate_options):
+        if final_up_down_state[index] not in {UpDownStates.UP, UpDownStates.ZERO}:
+            continue
+        for head_variables in head_variable_options:
+            heads.append((head_predicate, head_variables[0], head_variables[1]))
+
+    for body in bodies:
+        for head in heads:
+            b1, b2, b3 = body
+            h1, h2, h3 = head
+
+            # check rule safety - only check soundness of safe rules
+            rule_safe = True
+            for variable in {h2, h3}:
+                if variable not in {b2, b3}:
+                    rule_safe = False
+                    break
+            if not rule_safe:
+                continue
+
+            rules.append(f'{b1}({b2},{b3}) implies {h1}({h2},{h3})')
+
+    print(f'Checking a total of {len(rules)} rules')
+    count = 0
+    first_rule_captured_found = False
+    for rule in rules:
+        if is_monotonic_rule_captured(
+            model,
+            model_threshold,
+            iclr_encoder_decoder,
+            can_encoder_decoder,
+            rule,
+        ):
+            count += 1
+            if not first_rule_captured_found:
+                first_rule_captured_found = True
+                print('The following rule was captured:')
+                print(rule)
+                print()
+    return count
+
+
+# check if all rules with two body atoms are captured
+def check_all_rules_two_body_atoms(
+    model: gnn_architectures.GNN,
+    canonical_encoder_file: str,
+    iclr22_encoder_file: str,
+    model_threshold: float,
+):
+    rules = []
+    can_encoder_decoder = CanonicalEncoderDecoder(load_from_document=canonical_encoder_file)
+    iclr_encoder_decoder = ICLREncoderDecoder(load_from_document=iclr22_encoder_file)
+
+    # get alg outputs
+    final_up_down_state = up_down(model)
+
+    # list of predicates
+    predicate_list = list(iclr_encoder_decoder.input_predicate_to_unary_canonical_dict.keys())
+
+    body_predicate_options = []
+    for p1 in predicate_list:
+        for p2 in predicate_list:
+            body_predicate_options.append((p1, p2))
+    body_variable_options = [  # y is connecting variable in tree-like rule
+        ('x', 'y', 'y', 'z'),
+        ('y', 'x', 'y', 'z'),
+        ('x', 'y', 'z', 'y'),
+        ('y', 'x', 'z', 'y'),
+
+        ('x', 'y', 'y', 'y'),
+        ('y', 'x', 'y', 'y'),
+
+        ('y', 'y', 'y', 'z'),
+        ('y', 'y', 'z', 'y'),
+
+        ('y', 'y', 'y', 'y'),
+    ]
+    bodies = []
+    for (pred1, pred2) in body_predicate_options:
+        for body_variables in body_variable_options:
+            bodies.append((pred1, body_variables[0], body_variables[1],
+                           pred2, body_variables[2], body_variables[3]))
+
+    head_predicate_options = predicate_list[:]
+    head_variable_options = [
+        ('x', 'y'),
+        ('y', 'x'),
+        ('x', 'z'),
+        ('z', 'x'),
+        ('z', 'y'),
+        ('y', 'z'),
+
+        ('x', 'x'),
+        ('y', 'y'),
+        ('z', 'z'),
+    ]
+    heads = []
+    for index, head_predicate in enumerate(head_predicate_options):
+        if final_up_down_state[index] not in {UpDownStates.UP, UpDownStates.ZERO}:
+            continue
+        for head_variables in head_variable_options:
+            heads.append((head_predicate, head_variables[0], head_variables[1]))
+
+    for body in bodies:
+        for head in heads:
+            b1, b2, b3, b4, b5, b6 = body
+            h1, h2, h3 = head
+
+            # check rule safety - only check soundness of safe rules
+            rule_safe = True
+            for variable in {h2, h3}:
+                if variable not in {b2, b3, b5, b6}:
+                    rule_safe = False
+                    break
+            if not rule_safe:
+                continue
+
+            rules.append(f'{b1}({b2},{b3}) and {b4}({b5},{b6}) implies {h1}({h2},{h3})')
+
+    print(f'Checking a total of {len(rules)} rules')
+    random.shuffle(rules)
+    count = 0
+    first_rule_captured_found = False
+    for rule in rules:
+        if is_monotonic_rule_captured(
+            model,
+            model_threshold,
+            iclr_encoder_decoder,
+            can_encoder_decoder,
+            rule,
+        ):
+            count += 1
+            if not first_rule_captured_found:
+                first_rule_captured_found = True
+                print('The following rule was captured:')
+                print(rule)
+                print()
+    return count
+
+
 class RuleCaptureStates(Enum):
     Yes = 0
     NoNegInf = 1
