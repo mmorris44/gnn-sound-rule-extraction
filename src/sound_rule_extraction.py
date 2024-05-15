@@ -507,23 +507,21 @@ def check_all_rules_one_body_atom(
             rules.append(f'{b1}({b2},{b3}) implies {h1}({h2},{h3})')
 
     print(f'Checking a total of {len(rules)} rules')
+    random.shuffle(rules)
     count = 0
-    first_rule_captured_found = False
+    first_rule_captured = None
     for rule in rules:
         if is_monotonic_rule_captured(
-            model,
-            model_threshold,
-            iclr_encoder_decoder,
-            can_encoder_decoder,
-            rule,
+                model,
+                model_threshold,
+                iclr_encoder_decoder,
+                can_encoder_decoder,
+                rule,
         ):
             count += 1
-            if not first_rule_captured_found:
-                first_rule_captured_found = True
-                print('The following rule was captured:')
-                print(rule)
-                print()
-    return count
+            if first_rule_captured is None:
+                first_rule_captured = rule
+    return count, first_rule_captured
 
 
 # check if all rules with two body atoms are captured
@@ -606,7 +604,7 @@ def check_all_rules_two_body_atoms(
     print(f'Checking a total of {len(rules)} rules')
     random.shuffle(rules)
     count = 0
-    first_rule_captured_found = False
+    first_rule_captured = None
     for rule in rules:
         if is_monotonic_rule_captured(
             model,
@@ -616,12 +614,9 @@ def check_all_rules_two_body_atoms(
             rule,
         ):
             count += 1
-            if not first_rule_captured_found:
-                first_rule_captured_found = True
-                print('The following rule was captured:')
-                print(rule)
-                print()
-    return count
+            if first_rule_captured is None:
+                first_rule_captured = rule
+    return count, first_rule_captured
 
 
 class RuleCaptureStates(Enum):

@@ -410,7 +410,7 @@ if args.search_rule_check:
 
     body_atoms = [1, 2]
     for num_body_atoms in body_atoms:
-        num_captured = check_all_rules(
+        num_captured, sample_rule = check_all_rules(
             model,
             canonical_encoder_file,
             iclr22_encoder_file,
@@ -418,8 +418,11 @@ if args.search_rule_check:
             num_body_atoms,
         )
         print(f'{num_captured} rules with {num_body_atoms} body atom(s) are sound')
+        print('The following rule was captured:')
+        print(sample_rule)
         if args.use_wandb:
             wandb.log({f'sound_rules_with_{num_body_atoms}_body_atoms': num_captured})
+            wandb.log({f'sample_rule': sample_rule})
 
 if args.use_wandb:
     wandb.finish()
