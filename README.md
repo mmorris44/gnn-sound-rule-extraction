@@ -1,3 +1,8 @@
+# Relational Graph Convolutional Networks Do Not Learn Sound Rules
+Authors: **Matthew Morris, David J Tena Cucala, Bernardo Cuenca Grau, Ian Horrocks**
+
+This is the code used in our paper, ["Relational Graph Convolutional Networks Do Not Learn Sound Rules"](https://proceedings.kr.org/2024/84/kr2024-0084-morris-et-al.pdf), which is published in [KR 2024](https://proceedings.kr.org/2024/84/).
+
 # Installation
 These instructions are written for Linux.
 
